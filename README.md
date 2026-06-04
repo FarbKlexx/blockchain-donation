@@ -81,14 +81,22 @@ Die Farben markieren die beteiligte Schicht — **Frontend**, **Wallet**, **Node
 
 | Schritt im Diagramm | Schicht | ethers v6 |
 | --- | --- | --- |
-| Wallet verbinden | Frontend → Wallet | `new BrowserProvider(window.ethereum)`, `await provider.getSigner()` |
+| Wallet verbinden *(optional, später)* | Frontend → Wallet | echte Wallet: `new BrowserProvider(window.ethereum)` · **Projekt jetzt:** entfällt |
 | Stand lesen (gratis) | Frontend → Node | `await contract.<view>()` — read-only, keine Gas-Kosten |
 | Eingabe + Gas-Schätzung | Frontend | `await contract.<fn>.estimateGas(...)` |
-| Transaktion bauen + übergeben | Frontend → Wallet | `await contract.<fn>(...)` |
-| Wallet signiert | Wallet | Nutzer bestätigt im MetaMask-Popup |
+| Transaktion bauen + übergeben | Frontend → (Wallet) | `await contract.<fn>(...)` |
+| Wallet signiert *(optional)* | Wallet | echte Wallet: Popup · **Projekt jetzt:** Test-Key signiert automatisch |
 | Node führt aus (EVM) | Node | Transaktion wird ausgeführt/gemined |
 | Contract prüft + speichert | Contract | `require`, Zustandsänderung, `emit` Event |
 | Frontend liest neu | Frontend | `await tx.wait()`, dann erneut lesen |
+
+> **Im Projektrahmen vorerst (kein Wallet-Connect):** Statt MetaMask zu verbinden
+> und Popups zu bestätigen, signiert das Frontend direkt mit einem **Hardhat-
+> Test-Private-Key** gegen die lokale Node (`JsonRpcProvider` + `Wallet`). Die
+> braune „Wallet"-Schicht entfällt damit — der restliche Ablauf bleibt identisch.
+> Echte Wallet-Anbindung (`BrowserProvider`) lässt sich später ergänzen.
+> ⚠️ Nur Hardhat-**Test**-Keys (öffentlich/deterministisch) verwenden — Vite
+> backt `VITE_*` ins Client-Bundle, also niemals einen echten/finanzierten Key.
 
 **Die ABI-/Typen-Brücke (automatisch beim `compile`):**
 
@@ -200,30 +208,36 @@ npm run build -w frontend     # Type-Check + Production-Build
 | `format` | `prettier --write src/` | Formatieren |
 
 **Contract im Frontend ansprechen (ethers v6)**
-Die generierten Typen/ABIs liegen unter `src/contracts/`. Die Contract-Adresse
-kommt nach dem Deploy aus `VITE_CONTRACT_ADDRESS` (siehe
+Die generierten Typen/ABIs liegen unter `src/contracts/`. Im Projektrahmen
+arbeiten wir mit einem **Hardhat-Test-Key** direkt gegen die lokale Node — RPC-URL,
+Test-Key und Contract-Adresse kommen aus `.env` (siehe
 [`.env.example`](packages/frontend/.env.example)). Skizze:
 
 ```ts
-import { BrowserProvider } from 'ethers'
+import { JsonRpcProvider, Wallet } from 'ethers'
 import { Counter__factory } from '@/contracts/typechain'
 
-const provider = new BrowserProvider(window.ethereum) // EIP-1193 (MetaMask)
-const signer   = await provider.getSigner()           // v6: async!
-const contract = Counter__factory.connect(
-  import.meta.env.VITE_CONTRACT_ADDRESS,
-  signer,
-)
+// Dev-Setup: Test-Key aus `npx hardhat node`, direkt gegen die lokale Chain.
+const provider = new JsonRpcProvider(import.meta.env.VITE_RPC_URL)          // http://127.0.0.1:8545
+const signer   = new Wallet(import.meta.env.VITE_DEV_PRIVATE_KEY, provider)
+const contract = Counter__factory.connect(import.meta.env.VITE_CONTRACT_ADDRESS, signer)
 
-const value = await contract.x()        // Reads: einfach awaiten (Rückgabe = BigInt)
-const tx    = await contract.inc()      // Writes: Transaktion …
+const value = await contract.x()        // Read: einfach awaiten (Rückgabe = BigInt)
+const tx    = await contract.inc()      // Write: Transaktion …
 await tx.wait()                         // … und auf Bestätigung warten
 ```
 
-> ethers **v6**-Besonderheiten: `BrowserProvider` (nicht `Web3Provider`),
-> `getSigner()` ist **async**, Zahlen sind **BigInt** (nicht `BigNumber`),
+> **Test-Key statt Wallet:** `npx hardhat node` gibt 20 vorfinanzierte Accounts
+> mit privaten Schlüsseln aus — einen davon in `.env` als `VITE_DEV_PRIVATE_KEY`
+> setzen. ⚠️ Das sind öffentliche, deterministische **Test**-Keys, und Vite backt
+> `VITE_*` ins Client-Bundle — also niemals einen echten/finanzierten Key so nutzen.
+>
+> **Später (echte Nutzer):** `new BrowserProvider(window.ethereum)` +
+> `await provider.getSigner()` statt des Test-Keys — der Rest bleibt gleich.
+
+> ethers **v6**-Besonderheiten: Zahlen sind **BigInt** (nicht `BigNumber`),
 > `parseEther`/`formatEther` sind Top-Level-Importe, Adresse via
-> `await contract.getAddress()`.
+> `await contract.getAddress()`; bei `BrowserProvider` ist `getSigner()` **async**.
 
 ---
 
