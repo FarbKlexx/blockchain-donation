@@ -1,0 +1,32 @@
+{
+  "name": "blockchain-donation",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "dev": "npm run compile -w contracts && npm run dev -w frontend",
+    "build": "npm run compile -w contracts && npm run build -w frontend",
+    "compile": "npm run compile -w contracts",
+    "test:contracts": "npm run test -w contracts",
+    "node": "npm run node -w contracts",
+    "deploy:local": "npm run deploy:local -w contracts",
+    "deploy:sepolia": "npm run deploy:sepolia -w contracts"
+  },
+  "engines": {
+    "node": "^22.13.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FarbKlexx/blockchain-donation.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/FarbKlexx/blockchain-donation/issues"
+  },
+  "homepage": "https://github.com/FarbKlexx/blockchain-donation#readme"
+}
