@@ -53,16 +53,42 @@ blockchain-donation/
 Zwei Abläufe (Diagramme in [`docs/`](docs/)):
 
 **1. Einmalig — schreiben, kompilieren, deployen**
-([Diagramm](docs/ablauf_einmaliges_setup_deployment.svg))
-Contract schreiben → `compile` erzeugt **Bytecode + ABI** → `deploy` (eine
-Transaktion) → feste **Contract-Adresse** auf der Kette → **Adresse + ABI ins
-Frontend**, wo ethers.js darauf zeigt.
 
-**2. Laufzeit — pro Spende**
-([Diagramm](docs/ablauf_laufzeit_eine_spende.svg))
-Wallet verbinden → Stand lesen (gratis) → Betrag + Gas schätzen → Transaktion
-bauen → Wallet signiert → Node führt auf der EVM aus → Contract prüft & speichert
-→ Frontend liest neu. Schritte 2–8 wiederholen sich pro Aktion.
+<p align="center">
+  <img src="docs/ablauf_einmaliges_setup_deployment.svg" width="430"
+       alt="Smart Contract schreiben → Kompilieren (Bytecode + ABI) → Deployen → feste Contract-Adresse → Adresse + ABI ins Frontend" />
+</p>
+
+Jeder Schritt konkret im Projekt:
+
+| Schritt im Diagramm | Im Repo |
+| --- | --- |
+| Smart Contract schreiben (`.sol`) | [`packages/contracts/contracts/`](packages/contracts/contracts) |
+| Kompilieren → Bytecode + ABI | `npm run compile` → `artifacts/` + `types/` |
+| Deployen (einmalige Transaktion) | `npm run deploy:local` / `deploy:sepolia` (Hardhat Ignition) |
+| Contract-Adresse (fest auf der Kette) | Ausgabe von Ignition → ins Frontend als `VITE_CONTRACT_ADDRESS` |
+| Adresse + ABI ins Frontend | `postcompile` spiegelt ABI/Typen nach `frontend/src/contracts/` |
+
+**2. Laufzeit — pro Spende** (Schritte 2–8 wiederholen sich pro Aktion: Spende, Stimme, Auszahlung)
+
+<p align="center">
+  <img src="docs/ablauf_laufzeit_eine_spende.svg" width="470"
+       alt="Wallet verbinden → Stand lesen → Eingabe + Gas-Schätzung → Transaktion bauen → Wallet signiert → Node führt aus → Contract prüft + speichert → Frontend liest neu" />
+</p>
+
+Die Farben markieren die beteiligte Schicht — **Frontend**, **Wallet**, **Node**,
+**Contract** — und so sieht das mit ethers v6 aus:
+
+| Schritt im Diagramm | Schicht | ethers v6 |
+| --- | --- | --- |
+| Wallet verbinden | Frontend → Wallet | `new BrowserProvider(window.ethereum)`, `await provider.getSigner()` |
+| Stand lesen (gratis) | Frontend → Node | `await contract.<view>()` — read-only, keine Gas-Kosten |
+| Eingabe + Gas-Schätzung | Frontend | `await contract.<fn>.estimateGas(...)` |
+| Transaktion bauen + übergeben | Frontend → Wallet | `await contract.<fn>(...)` |
+| Wallet signiert | Wallet | Nutzer bestätigt im MetaMask-Popup |
+| Node führt aus (EVM) | Node | Transaktion wird ausgeführt/gemined |
+| Contract prüft + speichert | Contract | `require`, Zustandsänderung, `emit` Event |
+| Frontend liest neu | Frontend | `await tx.wait()`, dann erneut lesen |
 
 **Die ABI-/Typen-Brücke (automatisch beim `compile`):**
 
@@ -101,7 +127,7 @@ verschlüsselten Hardhat-Keystore (siehe [Deployment](#deployment)).
 ## Erste Schritte
 
 ```sh
-git clone <repo> && cd blockchain-donation
+git clone https://github.com/FarbKlexx/blockchain-donation.git && cd blockchain-donation
 nvm use                 # Node 22 aktivieren
 npm install             # installiert alle Workspaces auf einmal
 npm run compile         # Contracts kompilieren + ABIs/Typen ins Frontend spiegeln
