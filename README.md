@@ -13,6 +13,36 @@ werden — so „zeigt" das Frontend per ethers.js auf den deployten Contract.
 
 ---
 
+## Voraussetzungen
+
+- **Node.js 22 LTS** (≥ 22.13.0). Hardhat 3 verlangt diese Version; auf Node 24/25
+  scheitert der Solidity-Test-Reporter (siehe [Troubleshooting](#troubleshooting)).
+- Das Repo pinnt die Version in `.nvmrc` / `.node-version`. Mit nvm/fnm/Volta:
+
+  ```sh
+  nvm use        # oder: fnm use   → liest .nvmrc / .node-version
+  ```
+
+  Ohne Versionsmanager einfach Node 22 LTS verwenden. Die `engines`-Felder sind
+  ein Hinweis (npm **warnt**, blockiert die Installation aber nicht).
+
+---
+
+## Erste Schritte
+
+```sh
+git clone https://github.com/FarbKlexx/blockchain-donation.git && cd blockchain-donation
+nvm use                 # Node 22 aktivieren
+npm install             # installiert alle Workspaces auf einmal
+npm run compile         # Contracts kompilieren + ABIs/Typen ins Frontend spiegeln
+npm run dev             # Frontend starten (kompiliert vorher die Contracts)
+```
+
+> `npm install` einmal im Root genügt — npm Workspaces installiert beide Pakete
+> gemeinsam und teilt Dependencies über das Root-`node_modules`.
+
+---
+
 ## Architektur
 
 ### Monorepo-Aufbau
@@ -114,36 +144,6 @@ hardhat compile
 neu bei jedem `compile`. Deshalb kompilieren die Root-Scripts `dev`/`build` immer
 zuerst die Contracts. Secrets stehen **nicht** in `.env`, sondern im
 verschlüsselten Hardhat-Keystore (siehe [Deployment](#deployment)).
-
----
-
-## Voraussetzungen
-
-- **Node.js 22 LTS** (≥ 22.13.0). Hardhat 3 verlangt diese Version; auf Node 24/25
-  scheitert der Solidity-Test-Reporter (siehe [Troubleshooting](#troubleshooting)).
-- Das Repo pinnt die Version in `.nvmrc` / `.node-version`. Mit nvm/fnm/Volta:
-
-  ```sh
-  nvm use        # oder: fnm use   → liest .nvmrc / .node-version
-  ```
-
-  Ohne Versionsmanager einfach Node 22 LTS verwenden. Die `engines`-Felder sind
-  ein Hinweis (npm **warnt**, blockiert die Installation aber nicht).
-
----
-
-## Erste Schritte
-
-```sh
-git clone https://github.com/FarbKlexx/blockchain-donation.git && cd blockchain-donation
-nvm use                 # Node 22 aktivieren
-npm install             # installiert alle Workspaces auf einmal
-npm run compile         # Contracts kompilieren + ABIs/Typen ins Frontend spiegeln
-npm run dev             # Frontend starten (kompiliert vorher die Contracts)
-```
-
-> `npm install` einmal im Root genügt — npm Workspaces installiert beide Pakete
-> gemeinsam und teilt Dependencies über das Root-`node_modules`.
 
 ---
 
