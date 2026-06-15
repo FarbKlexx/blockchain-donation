@@ -10,6 +10,8 @@ contract Donation{
     uint256 public start;
     uint256 public end;
 
+    uint256 public totalPayout;
+
     //solidity has no decimal numbers, so we use these variables to calculate percentages
     uint256 constant basepoints = 10000;
 
@@ -17,6 +19,8 @@ contract Donation{
     address[] public validators;
     mapping(address => bool) public isValidator;
 
+    uint256 public milestoneCount;
+    uint256 public currentMilestone;
     mapping(uint256 => Milestone) public milestones;
     mapping(uint256 => mapping(address => bool)) public votesForMilestone;
     mapping(uint256 => mapping(address => bool)) hasVoted;
@@ -28,7 +32,7 @@ contract Donation{
         bool paid;
     }
 
-    uint256 public neededVoteMajorityInBps = 667;
+    uint256 public neededVoteMajorityInBps = 6666;
 
     //events create log entries on blockchain
     //indexed address enables efficient search for donations from a specifc donor 
@@ -44,19 +48,34 @@ contract Donation{
     );
 
     constructor(uint256 goal, address[] memory validators_, string memory description_, uint256 duration, uint16[] memory milestonePercentages){
-        donationGoal = goal;
-        validators = validators_;
-        for(uint i = 0; i < validators_.length; i++){
-            isValidator[validators_[i]] = true;
+        
+        uint256 totalPercentage;
+        for(uint i = 0; i < milestonePercentages.length; i++){
+            totalPercentage += milestonePercentages[i];
+            milestones[i] = Milestone(milestonePercentages[i], 0, 0, false);
+            milestoneCount++;
         }
+        require(totalPercentage == basepoints, "Milestones percent have to add up to 10000");
+
+
+        for(uint i = 0; i < validators_.length; i++){
+            address validator = validators_[i];
+            require(validator != address(0),"Empty address validator not allowed"
+            );
+
+            require(!isValidator[validator], "Validator already exists"
+            );
+
+            isValidator[validators_[i]] = true;
+            validators.push(validator);
+        }
+        require(validators.length > 0, "Validator required");
+
+        donationGoal = goal;
         description = description_;
         contractOwner = msg.sender;
         start = block.timestamp;
         end = block.timestamp + duration;
-
-        for(uint i = 0; i < milestonePercentages.length; i++){
-            milestones[i] = Milestone(milestonePercentages[i], 0, 0, false);
-        }
 
     } 
 
@@ -69,17 +88,28 @@ contract Donation{
         emit DonationReceived(msg.sender, msg.value);
     }
 
-    function voteMilestone(uint milestoneIndex, bool vote) external isAllowedToVote{
+    function voteMilestone(uint milestoneIndex, bool vote) external isAllowedToVote isMilestone(milestoneIndex) milestoneReached(milestoneIndex){
         require(!hasVoted[milestoneIndex][msg.sender]);
+
         hasVoted[milestoneIndex][msg.sender] = true;
         votesForMilestone[milestoneIndex][msg.sender] = vote;
+
+        if (vote){
+            milestones[milestoneIndex].approvedCount++;
+        } else {
+            milestones[milestoneIndex].rejectedCount++;
+        }
+
 
         emit VoteSubmitted(msg.sender, milestoneIndex, vote);
     }
 
-    function payout(uint milestoneIndex) public isApproved(milestoneIndex){
+    function payout(uint milestoneIndex) public isOwner isMilestone(milestoneIndex) PreviousMilestonePaid(milestoneIndex-1) isApproved(milestoneIndex){
         require(!milestones[milestoneIndex].paid);
-        payable(contractOwner).transfer(address(this).balance);
+        uint256 milestonePayout = calculatePortion(donationGoal, milestones[milestoneIndex].percentage);
+        milestones[milestoneIndex].paid = true;
+        totalPayout += milestonePayout;
+        payable(contractOwner).transfer(milestonePayout);
     }
 
     modifier isPositiveDonation(uint256 x){
@@ -101,6 +131,29 @@ contract Donation{
         require(calculatePercentageInBps(milestones[milestoneIndex].approvedCount, validators.length) >=  neededVoteMajorityInBps);
         _;
     }
+
+    modifier isMilestone(uint256 x){
+        require(x < milestoneCount, "milestone does not exist");
+        _;
+    }
+
+    modifier isOwner(){
+        require(msg.sender == contractOwner, "only Owner is allowed to do this");
+        _;
+    }
+
+    modifier milestoneReached(uint256 milestoneIndex){
+        require(totalDonations >= calculatePortion(donationGoal, milestones[milestoneIndex].percentage));
+        _;
+    }
+
+    modifier PreviousMilestonePaid(uint256 milestoneIndex){
+        if (milestoneIndex > 0){
+            require(milestones[milestoneIndex].paid);
+        }
+        _;
+    }
+
     function getContractBalance() external view returns (uint256){
         return address(this).balance;
     }
