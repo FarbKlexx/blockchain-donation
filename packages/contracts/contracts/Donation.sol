@@ -27,6 +27,7 @@ contract Donation{
 
     struct Milestone{
         uint16 percentage;
+        bool readyToBeApproved;
         uint16 approvedCount;
         uint16 rejectedCount;
         bool paid;
@@ -61,7 +62,7 @@ contract Donation{
         for(uint i = 0; i < milestonePercentages.length; i++){
             require(milestonePercentages[i] > 0, "Milestone percentage must be positive");
             totalPercentage += milestonePercentages[i];
-            milestones[i] = Milestone(milestonePercentages[i], 0, 0, false);
+            milestones[i] = Milestone(milestonePercentages[i], false, 0, 0, false);
             milestoneCount++;
         }
         require(totalPercentage == basepoints, "Milestones percent have to add up to 10000");
@@ -101,7 +102,11 @@ contract Donation{
         emit DonationReceived(msg.sender, msg.value);
     }
 
-    function voteMilestone(uint milestoneIndex, bool vote) external isAllowedToVote goalReached() isMilestone(milestoneIndex) isCurrentMilestone(milestoneIndex) {
+    function enableVoting(uint256 milestoneIndex) external isOwner() isCurrentMilestone(milestoneIndex) {
+        milestones[milestoneIndex].readyToBeApproved = true;
+    }
+
+    function voteMilestone(uint milestoneIndex, bool vote) external isAllowedToVote goalReached() isMilestone(milestoneIndex) isCurrentMilestone(milestoneIndex) isReadyToBeApproved(milestoneIndex) {
         require(!hasVoted[milestoneIndex][msg.sender], "Validator has already voted");
 
         hasVoted[milestoneIndex][msg.sender] = true;
@@ -120,6 +125,8 @@ contract Donation{
     function payout(uint milestoneIndex) public isOwner isMilestone(milestoneIndex) isCurrentMilestone(milestoneIndex) isApproved(milestoneIndex){
         require(!milestones[milestoneIndex].paid, "This Milestone has already been paid");
         uint256 milestonePayout = calculatePortion(totalDonations, milestones[milestoneIndex].percentage);
+        require(address(this).balance >= milestonePayout, "Not enough funds for payout");
+
         milestones[milestoneIndex].paid = true;
         totalPayout += milestonePayout;
         
@@ -143,6 +150,11 @@ contract Donation{
 
     modifier isAllowedToVote(){
         require(isValidator[msg.sender] == true, "Address is not a validator");
+        _;
+    }
+
+    modifier isReadyToBeApproved(uint256 milestoneIndex){
+        require(milestones[milestoneIndex].readyToBeApproved);
         _;
     }
 
