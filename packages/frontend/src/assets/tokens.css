@@ -1,0 +1,55 @@
+/* Design tokens — derived from the Figma file "Blockchain Donation"
+   (VICCGajty7z6cz5x2N8ZPg). Single source of truth for colors, typography
+   and spacing used across all donation-dApp screens. */
+:root {
+  /* Surfaces */
+  --bd-bg: #f7f7f7;
+  --bd-surface: #ffffff;
+  --bd-stroke: #dadadc;
+  --bd-divider: #e5e7eb;
+
+  /* Text */
+  --bd-black: #26272a;
+  --bd-grey-text: #717184;
+
+  /* Fills */
+  --bd-grey: #edeff2; /* progress track, segmented control, milestone badge */
+  --bd-icon-dark: #2d313e; /* smart-contract icon tiles */
+
+  /* Status accents */
+  --bd-green: #10b981; /* verified / funded / completed / validators */
+  --bd-green-tint: rgba(16, 185, 129, 0.13);
+  --bd-amber: #f59e0b; /* milestone "In Bearbeitung" */
+  --bd-amber-tint: rgba(245, 158, 11, 0.13);
+  --bd-neutral: #6b7280; /* milestone "Ausstehend" */
+  --bd-neutral-tint: rgba(107, 114, 128, 0.13);
+
+  /* Typography */
+  --bd-font: 'Geist', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --bd-font-stats: 'Lato', var(--bd-font);
+
+  /* Radii */
+  --bd-radius-sm: 8px;
+  --bd-radius-md: 12px;
+  --bd-radius-lg: 20px;
+  --bd-radius-pill: 999px;
+
+  /* Shadows */
+  --bd-shadow-card: 0 4px 6px rgba(0, 0, 0, 0.04);
+
+  /* Layout */
+  --bd-page-gutter: 200px;
+  --bd-content-max: 1512px;
+}
+
+@media (max-width: 1100px) {
+  :root {
+    --bd-page-gutter: 48px;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --bd-page-gutter: 20px;
+  }
+}
