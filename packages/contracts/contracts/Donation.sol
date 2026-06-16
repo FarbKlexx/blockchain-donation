@@ -124,6 +124,7 @@ contract Donation{
 
     function payout(uint milestoneIndex) public isOwner isMilestone(milestoneIndex) isCurrentMilestone(milestoneIndex) isApproved(milestoneIndex){
         require(!milestones[milestoneIndex].paid, "This Milestone has already been paid");
+        
         uint256 milestonePayout = calculatePortion(totalDonations, milestones[milestoneIndex].percentage);
         require(address(this).balance >= milestonePayout, "Not enough funds for payout");
 
@@ -200,6 +201,7 @@ contract Donation{
     }
 
     function calculatePercentageInBps(uint256 value, uint256 total)internal pure returns (uint256) {
+        require(total > 0, "Total cannot be 0");
         return (value * basepoints) / total;
     }
 }
