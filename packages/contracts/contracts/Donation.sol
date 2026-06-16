@@ -47,10 +47,19 @@ contract Donation{
         bool approved
     );
 
+    event PayoutMade(
+        uint256 milestoneIndex,
+        uint256 amount
+    );
+
     constructor(uint256 goal, address[] memory validators_, string memory description_, uint256 duration, uint16[] memory milestonePercentages){
-        
+        require(goal > 0, "Donation goal must be positive");
+        require(duration > 0, "Duration must be positive");
+
         uint256 totalPercentage;
+
         for(uint i = 0; i < milestonePercentages.length; i++){
+            require(milestonePercentages[i] > 0, "Milestone percentage must be positive");
             totalPercentage += milestonePercentages[i];
             milestones[i] = Milestone(milestonePercentages[i], 0, 0, false);
             milestoneCount++;
@@ -63,6 +72,9 @@ contract Donation{
             require(validator != address(0),"Empty address validator not allowed"
             );
 
+            require(validator != msg.sender,"Project owner cannot be a validator"
+            );
+
             require(!isValidator[validator], "Validator already exists"
             );
 
@@ -70,6 +82,7 @@ contract Donation{
             validators.push(validator);
         }
         require(validators.length > 0, "Validator required");
+
 
         donationGoal = goal;
         description = description_;
@@ -88,8 +101,8 @@ contract Donation{
         emit DonationReceived(msg.sender, msg.value);
     }
 
-    function voteMilestone(uint milestoneIndex, bool vote) external isAllowedToVote isMilestone(milestoneIndex) milestoneReached(milestoneIndex){
-        require(!hasVoted[milestoneIndex][msg.sender]);
+    function voteMilestone(uint milestoneIndex, bool vote) external isAllowedToVote goalReached() isMilestone(milestoneIndex) isCurrentMilestone(milestoneIndex) {
+        require(!hasVoted[milestoneIndex][msg.sender], "Validator has already voted");
 
         hasVoted[milestoneIndex][msg.sender] = true;
         votesForMilestone[milestoneIndex][msg.sender] = vote;
@@ -104,12 +117,18 @@ contract Donation{
         emit VoteSubmitted(msg.sender, milestoneIndex, vote);
     }
 
-    function payout(uint milestoneIndex) public isOwner isMilestone(milestoneIndex) PreviousMilestonePaid(milestoneIndex-1) isApproved(milestoneIndex){
-        require(!milestones[milestoneIndex].paid);
-        uint256 milestonePayout = calculatePortion(donationGoal, milestones[milestoneIndex].percentage);
+    function payout(uint milestoneIndex) public isOwner isMilestone(milestoneIndex) isCurrentMilestone(milestoneIndex) isApproved(milestoneIndex){
+        require(!milestones[milestoneIndex].paid, "This Milestone has already been paid");
+        uint256 milestonePayout = calculatePortion(totalDonations, milestones[milestoneIndex].percentage);
         milestones[milestoneIndex].paid = true;
         totalPayout += milestonePayout;
-        payable(contractOwner).transfer(milestonePayout);
+        
+        (bool success, ) = payable(contractOwner).call{value: milestonePayout}("");
+        require(success, "Send failed");
+
+        currentMilestone++;
+
+        emit PayoutMade(milestoneIndex, milestonePayout);
     }
 
     modifier isPositiveDonation(uint256 x){
@@ -123,12 +142,12 @@ contract Donation{
     }
 
     modifier isAllowedToVote(){
-        require(isValidator[msg.sender] == true);
+        require(isValidator[msg.sender] == true, "Address is not a validator");
         _;
     }
 
     modifier isApproved(uint256 milestoneIndex){
-        require(calculatePercentageInBps(milestones[milestoneIndex].approvedCount, validators.length) >=  neededVoteMajorityInBps);
+        require(calculatePercentageInBps(milestones[milestoneIndex].approvedCount, validators.length) >= neededVoteMajorityInBps, "Milestone is not yet approved");
         _;
     }
 
@@ -142,15 +161,14 @@ contract Donation{
         _;
     }
 
-    modifier milestoneReached(uint256 milestoneIndex){
-        require(totalDonations >= calculatePortion(donationGoal, milestones[milestoneIndex].percentage));
+    modifier goalReached(){
+        require(totalDonations >= donationGoal, "The donation goal has not yet been reached");
         _;
     }
 
-    modifier PreviousMilestonePaid(uint256 milestoneIndex){
-        if (milestoneIndex > 0){
-            require(milestones[milestoneIndex].paid);
-        }
+
+    modifier isCurrentMilestone(uint256 milestoneIndex){
+        require(milestoneIndex == currentMilestone, "chosen Milestone is not the current Milestone");
         _;
     }
 
