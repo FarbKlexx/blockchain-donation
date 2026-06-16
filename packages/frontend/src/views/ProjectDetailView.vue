@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import type { Project } from '@/types/project'
+import type { Funding, Project } from '@/types/project'
 import { getProject } from '@/services/projectsService'
 import { formatDate } from '@/utils/format'
 import ProjectHero from '@/components/project/ProjectHero.vue'
@@ -34,12 +34,11 @@ async function load() {
   }
 }
 
-// Optimistically reflect a donation in the funding figures.
-// INTEGRATION POINT: after the real tx confirms, re-read funding from chain.
-function onDonated(newRaised: number) {
+// Apply the authoritative funding the service returns AFTER the tx confirmed
+// (a fresh chain read) — no client-side arithmetic on money here.
+function onDonated(funding: Funding) {
   if (project.value) {
-    project.value.funding.raised = newRaised
-    project.value.funding.donors += 1
+    project.value.funding = funding
   }
 }
 

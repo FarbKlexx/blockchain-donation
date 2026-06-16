@@ -9,20 +9,53 @@
 // views and types stay exactly as they are.
 //
 // The functions are already async and return Promises so the UI's await/
-// loading handling is correct ahead of the real network calls.
+// loading/error handling is correct ahead of the real network calls.
 //
 // See INTEGRATION.md for the full UI-element → contract-call mapping.
 // ─────────────────────────────────────────────────────────────────────────
 
 import mockdata from '@/data/mockdata.json'
-import type { Project, ProjectFilter, ProjectSort } from '@/types/project'
+import type { Funding, Project, ProjectFilter, ProjectSort } from '@/types/project'
 import { percentFunded } from '@/utils/format'
+import { decimalsFor, validateAmount } from '@/utils/amount'
 
 const projects = mockdata.projects as Project[]
 
 /** Simulates network/RPC latency so loading states behave like production. */
 function delay<T>(value: T, ms = 250): Promise<T> {
   return new Promise((resolve) => setTimeout(() => resolve(value), ms))
+}
+
+/**
+ * FAIL-CLOSED GUARD for the inlined signing key.
+ *
+ * The frontend signs with a key baked into the bundle (VITE_DEV_PRIVATE_KEY).
+ * That is only acceptable against a local Hardhat node with a throwaway test
+ * key. This guard refuses to act when a key is present but the RPC endpoint is
+ * not localhost — turning the README's comment-only warning into a mechanism,
+ * so a real/funded key can never silently send a transaction to a public chain.
+ *
+ * No key set (pure read-only / current mock) → no-op.
+ */
+function assertLocalSigner(): void {
+  const key = import.meta.env.VITE_DEV_PRIVATE_KEY
+  if (!key) return
+
+  const rpc = import.meta.env.VITE_RPC_URL
+  let host = ''
+  try {
+    host = rpc ? new URL(rpc).hostname : ''
+  } catch {
+    host = ''
+  }
+  const isLocal = host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0'
+  if (!isLocal) {
+    throw new Error(
+      'Abgebrochen: Ein im Bundle hinterlegter Signing-Key darf nur gegen eine ' +
+        'lokale Node verwendet werden (VITE_RPC_URL muss localhost sein). ' +
+        'Dieses Frontend ist ausschließlich für die lokale Entwicklung gedacht.',
+    )
+  }
 }
 
 export interface ListOptions {
@@ -80,25 +113,40 @@ export async function getProject(id: string): Promise<Project | null> {
 export interface DonationResult {
   /** Transaction hash once the donation is mined. */
   txHash: string
-  newRaised: number
+  /** Authoritative funding state AFTER the tx confirmed (a fresh chain read). */
+  funding: Funding
 }
 
 /**
  * Make a donation to a project.
  *
- * TODO(integration): this is where the write transaction goes. With ethers v6:
- *   const tx = await contract.donate({ value: parseUnits(amount, decimals) })
- *   await tx.wait()
- * For an ERC-20 like USDC this is `approve` + `donate(amount)`. Until then this
- * is a no-op stub that the "Jetzt unterstützen" button calls.
+ * `amount` is the validated decimal STRING the user typed (never a float) — it
+ * is what `parseUnits(amount, decimals)` consumes on-chain.
+ *
+ * TODO(integration): this is where the write transaction goes. With ethers v6
+ * and an ERC-20 like USDC this is a two-step flow:
+ *   const units = parseUnits(amount, decimalsFor(currency))
+ *   await (await token.approve(escrow, units)).wait()   // step 1 (allowance)
+ *   await (await escrow.donate(units)).wait()           // step 2 (donate)
+ * Handle the partial-failure case (approve ok, donate reverts) explicitly.
+ * After confirmation, RE-READ funding from chain — do not trust a client value.
  */
-export async function donate(projectId: string, amount: number): Promise<DonationResult> {
-  console.warn(
-    `[mock] donate(${projectId}, ${amount}) — no transaction sent. Wire this to the escrow contract.`,
-  )
+export async function donate(projectId: string, amount: string): Promise<DonationResult> {
+  assertLocalSigner()
+
   const project = projects.find((p) => p.id === projectId)
-  const newRaised = (project?.funding.raised ?? 0) + amount
-  return delay({ txHash: '0xMOCK_TX_HASH', newRaised })
+  if (!project) throw new Error('Projekt nicht gefunden.')
+
+  // Defense in depth: re-validate at the seam, not just in the UI.
+  const check = validateAmount(amount, decimalsFor(project.currency))
+  if (!check.ok) throw new Error(check.error)
+
+  // [mock] Simulate a confirmed transaction mutating on-chain state. After a
+  // real tx.wait(), the new figures would come from re-reading the contract.
+  project.funding.raised += Number(check.value)
+  project.funding.donors += 1
+
+  return delay({ txHash: '0xMOCK_TX_HASH', funding: { ...project.funding } })
 }
 
 export interface WalletConnection {
@@ -113,6 +161,6 @@ export interface WalletConnection {
  * `new BrowserProvider(window.ethereum)` + `await provider.getSigner()`.
  */
 export async function connectWallet(): Promise<WalletConnection> {
-  console.warn('[mock] connectWallet() — no wallet connected. Wire this to ethers signer setup.')
+  assertLocalSigner()
   return delay({ address: '0x0000...0000' })
 }

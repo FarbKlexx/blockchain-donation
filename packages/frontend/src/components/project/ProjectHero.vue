@@ -1,25 +1,41 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import type { Project } from '@/types/project'
+import { computed, ref } from 'vue'
+import type { Funding, Project } from '@/types/project'
 import { donate } from '@/services/projectsService'
+import { decimalsFor, validateAmount } from '@/utils/amount'
 import AppIcon from '@/components/ui/AppIcon.vue'
 
 const props = defineProps<{ project: Project }>()
-const emit = defineEmits<{ donated: [newRaised: number] }>()
+const emit = defineEmits<{ donated: [funding: Funding] }>()
 
 const amount = ref('')
 const submitting = ref(false)
+const error = ref<string | null>(null)
+
+const decimals = computed(() => decimalsFor(props.project.currency))
 
 // INTEGRATION POINT: "Jetzt unterstützen" — the donation transaction.
 // Calls the mock service today; wire to the escrow contract's donate().
 async function onDonate() {
-  const value = Number(amount.value)
-  if (!value || value <= 0 || submitting.value) return
+  if (submitting.value) return
+  error.value = null
+
+  // Validate as a decimal string (never a float) before anything is sent.
+  const check = validateAmount(amount.value, decimals.value)
+  if (!check.ok) {
+    error.value = check.error
+    return
+  }
+
   submitting.value = true
   try {
-    const result = await donate(props.project.id, value)
-    emit('donated', result.newRaised)
+    const result = await donate(props.project.id, check.value)
+    // Use the authoritative post-confirmation funding from the service,
+    // not a client-computed value.
+    emit('donated', result.funding)
     amount.value = ''
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Spende fehlgeschlagen. Bitte erneut versuchen.'
   } finally {
     submitting.value = false
   }
@@ -43,22 +59,26 @@ async function onDonate() {
         <p class="hero__summary">{{ project.summary }}</p>
       </div>
 
-      <form class="hero__donate" @submit.prevent="onDonate">
-        <span class="hero__currency">{{ project.currency }}</span>
-        <input
-          v-model="amount"
-          class="hero__input"
-          type="number"
-          min="0"
-          step="any"
-          inputmode="decimal"
-          placeholder="Betrag eingeben"
-          aria-label="Spendenbetrag"
-        />
-        <button class="hero__submit" type="submit" :disabled="submitting">
-          {{ submitting ? 'Sende …' : 'Jetzt unterstützen' }}
-        </button>
-      </form>
+      <div class="hero__donate-wrap">
+        <form class="hero__donate" :class="{ 'hero__donate--error': error }" @submit.prevent="onDonate">
+          <span class="hero__currency">{{ project.currency }}</span>
+          <input
+            v-model="amount"
+            class="hero__input"
+            type="number"
+            min="0"
+            step="any"
+            inputmode="decimal"
+            placeholder="Betrag eingeben"
+            aria-label="Spendenbetrag"
+            :aria-invalid="error ? 'true' : undefined"
+          />
+          <button class="hero__submit" type="submit" :disabled="submitting">
+            {{ submitting ? 'Sende …' : 'Jetzt unterstützen' }}
+          </button>
+        </form>
+        <p v-if="error" class="hero__error" role="alert">{{ error }}</p>
+      </div>
     </div>
   </section>
 </template>
@@ -180,6 +200,21 @@ async function onDonate() {
 .hero__submit:disabled {
   opacity: 0.7;
   cursor: default;
+}
+
+.hero__donate-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hero__donate--error {
+  border-color: #dc2626;
+}
+
+.hero__error {
+  font-size: 13px;
+  color: #dc2626;
 }
 
 @media (max-width: 860px) {
