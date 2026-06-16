@@ -11,7 +11,7 @@ import AppIcon from '@/components/ui/AppIcon.vue'
 // dataset is split along the contract boundary: the "Smart Contract" section is
 // what DonationFactory.createDonation stores (and becomes immutable); the rest
 // is off-chain metadata. The connected account becomes the on-chain owner.
-// Submit is a placeholder (no deploy, no POST) — see services/createProject.
+// Submit deploys a mock contract address and persists metadata via the backend.
 const wallet = useWalletStore()
 
 const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/

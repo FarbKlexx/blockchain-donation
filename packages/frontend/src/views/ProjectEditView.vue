@@ -120,7 +120,8 @@ async function save() {
       })),
     }
     await updateProjectMetadata(props.id, patch)
-    saved.value = true // prototype: nothing persisted (see service stub)
+    saved.value = true
+    await load()
   } finally {
     saving.value = false
   }

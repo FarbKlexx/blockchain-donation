@@ -6,8 +6,8 @@
 //
 //   SOURCE 1  src/data/contractData.json     → the smart contract (ethers.js)
 //             on-chain state: financials, milestone release state, validators
-//   SOURCE 2  src/data/projectMetadata.json  → the backend REST API
-//             off-chain content: texts, images, news, display names/avatars
+//   SOURCE 2  backend REST API (/api/projects)  → off-chain metadata
+//             texts, images, news, display names/avatars
 //
 // The service fetches both (in parallel), then `mergeProject()` joins them into
 // the `Project` UI model — by id (project), index (milestones), address
@@ -22,17 +22,22 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 import contractData from '@/data/contractData.json'
-import projectMetadata from '@/data/projectMetadata.json'
 import type { Funding, MilestoneStatus, Project, ProjectFilter, ProjectSort, ProjectStatus } from '@/types/project'
 import type { ContractCampaign, ProjectMetadata } from '@/types/sources'
 import { daysLeftUntil, hasEnded, percentFunded, timeLeftShort } from '@/utils/format'
 import { NATIVE_CURRENCY, decimalsFor, validateAmount } from '@/utils/amount'
 import { explorerAddressUrl, explorerLabel } from '@/utils/address'
 
-// In-memory copies of the two raw sources (the campaigns array is mutated by
-// donate() to simulate on-chain state changing).
+// In-memory copy of the on-chain campaign data (mutated by donate() to simulate state changes).
 const campaigns = contractData.campaigns as ContractCampaign[]
-const metadata = projectMetadata.projects as ProjectMetadata[]
+
+async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(input, init)
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status} ${response.statusText}`)
+  }
+  return response.json() as Promise<T>
+}
 
 /** Simulates network/RPC latency so loading states behave like production. */
 function delay<T>(value: T, ms = 250): Promise<T> {
@@ -55,15 +60,17 @@ async function fetchCampaignByAddress(address: string): Promise<ContractCampaign
 }
 
 // ── SOURCE 2: backend REST API (off-chain metadata) ─────────────────────────
-// TODO(integration): replace these with `fetch('/api/projects')` and
-// `fetch('/api/projects/' + id)` (returning the ProjectMetadata shape).
 
 async function fetchMetadata(): Promise<ProjectMetadata[]> {
-  return delay(metadata)
+  return fetchJson<ProjectMetadata[]>('/api/projects')
 }
 
 async function fetchMetadataById(id: string): Promise<ProjectMetadata | null> {
-  return delay(metadata.find((m) => m.id === id) ?? null)
+  try {
+    return await fetchJson<ProjectMetadata>(`/api/projects/${id}`)
+  } catch {
+    return null
+  }
 }
 
 // ── Account roles (one-time scan at login) ───────────────────────────────────
@@ -188,7 +195,12 @@ function mergeProject(c: ContractCampaign, m: ProjectMetadata): Project {
     // ── from backend metadata ──
     title: m.title,
     summary: m.summary,
-    description: m.description,
+    // Normalize description: backend may return a string, an array of strings,
+    // or an array of objects with a `description` field. Ensure the UI always
+    // receives `description: string[]`.
+    description: Array.isArray(m.description)
+      ? m.description.map((d) => (typeof d === 'string' ? d : String((d as any).description ?? '')))
+      : [String(m.description ?? '')],
     image: m.image,
     category: m.category,
     news: m.news,
@@ -354,7 +366,7 @@ export async function donate(projectId: string, amount: string): Promise<Donatio
   assertLocalSigner()
 
   // Route id is the slug → resolve to the on-chain address, then the campaign.
-  const meta = metadata.find((m) => m.id === projectId)
+  const meta = await fetchMetadataById(projectId)
   const campaign = meta && campaigns.find((c) => c.address === meta.address)
   if (!campaign) throw new Error('Projekt nicht gefunden.')
 
@@ -445,13 +457,11 @@ export async function updateProjectMetadata(
   id: string,
   patch: ProjectMetadataPatch,
 ): Promise<void> {
-  if (import.meta.env.DEV) {
-    console.info('[projectsService] updateProjectMetadata — mock no-op (nothing persisted):', {
-      id,
-      patch,
-    })
-  }
-  return delay(undefined)
+  await fetchJson<ProjectMetadata>(`/api/projects/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
 }
 
 /** Everything needed to create a project, split along the contract boundary.
@@ -489,6 +499,11 @@ export interface CreateProjectResult {
   txHash: string
 }
 
+function mockContractAddress(): string {
+  const hex = Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
+  return `0x${hex}`
+}
+
 /**
  * Create a project. Available to ANY connected account (no role required) — the
  * creator becomes the on-chain owner. Two steps: deploy via the factory, then
@@ -519,10 +534,33 @@ export interface CreateProjectResult {
  */
 export async function createProject(payload: CreateProjectPayload): Promise<CreateProjectResult> {
   assertLocalSigner()
-  if (import.meta.env.DEV) {
-    console.info('[projectsService] createProject — mock no-op (nothing deployed/persisted):', payload)
-  }
-  return delay({ address: '0xMOCK_NEW_PROJECT_ADDRESS', txHash: '0xMOCK_CREATE_TX_HASH' })
+
+  const address = mockContractAddress()
+  const txHash = '0xMOCK_CREATE_TX_HASH'
+
+  const milestones = payload.metadata.milestones.map((m, i) => ({
+    index: String(i + 1).padStart(2, '0'),
+    title: m.title,
+    description: m.description,
+  }))
+
+  await fetchJson<{ status: string; project_id: string }>('/api/projects', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      address,
+      title: payload.metadata.title,
+      summary: payload.metadata.summary,
+      category: payload.metadata.category,
+      image: payload.metadata.image,
+      description: payload.metadata.description,
+      verified: false,
+      milestones,
+      news: payload.metadata.news,
+    }),
+  })
+
+  return { address, txHash }
 }
 
 export interface WalletConnection {
