@@ -33,10 +33,23 @@ contract Donation{
         bool paid;
     }
 
+    Status public currentStatus;
+    enum Status{
+        Funding,
+        Payout,
+        Failed,
+        Closed
+    }
+
+    enum FailureReason{
+        None,
+        NoFunding,
+        RejectedByValidators,
+        ClosedByOwner
+    }
+
     uint256 public neededVoteMajorityInBps = 6666;
 
-    //events create log entries on blockchain
-    //indexed address enables efficient search for donations from a specifc donor 
     event DonationReceived(
         address indexed donor,
         uint256 amount
@@ -48,9 +61,23 @@ contract Donation{
         bool approved
     );
 
+    event VotesEnabled(
+        uint256 milestoneIndex
+    );
+
     event PayoutMade(
         uint256 milestoneIndex,
         uint256 amount
+    );
+
+    event RestPayoutMade(
+        uint256 amount
+    );
+
+    event StatusChanged(
+        Status oldStatus,
+        Status newStatus,
+        FailureReason reason
     );
 
     constructor(address owner, uint256 goal, address[] memory validators_, string memory description_, uint256 duration, uint16[] memory milestonePercentages){
@@ -90,23 +117,31 @@ contract Donation{
         contractOwner = owner;
         start = block.timestamp;
         end = block.timestamp + duration;
+        currentStatus = Status.Funding;
 
     } 
 
-    function donate() external payable isPositiveDonation(msg.value) isInTimeFrame(){
+    function donate() external payable isPositiveDonation(msg.value) onlyDuringFunding() isInTimeFrame() noOverpaying(msg.value) {
         uint256 donation = msg.value;
 
         totalDonations += donation;
         donations[msg.sender] += donation;
 
         emit DonationReceived(msg.sender, msg.value);
+
+        if(totalDonations >= donationGoal){
+            Status oldStatus = currentStatus;
+            currentStatus = Status.Payout;
+            emit StatusChanged(oldStatus, currentStatus, FailureReason.None);
+        }
     }
 
-    function enableVoting(uint256 milestoneIndex) external isOwner() isCurrentMilestone(milestoneIndex) {
+    function enableVoting(uint256 milestoneIndex) external isOwner() onlyDuringPayout() isCurrentMilestone(milestoneIndex) {
         milestones[milestoneIndex].readyToBeApproved = true;
+        emit VotesEnabled(milestoneIndex);
     }
 
-    function voteMilestone(uint milestoneIndex, bool vote) external isAllowedToVote goalReached() isMilestone(milestoneIndex) isCurrentMilestone(milestoneIndex) isReadyToBeApproved(milestoneIndex) {
+    function voteMilestone(uint milestoneIndex, bool vote) external isAllowedToVote onlyDuringPayout() isMilestone(milestoneIndex) isCurrentMilestone(milestoneIndex) isReadyToBeApproved(milestoneIndex) {
         require(!hasVoted[milestoneIndex][msg.sender], "Validator has already voted");
 
         hasVoted[milestoneIndex][msg.sender] = true;
@@ -122,21 +157,31 @@ contract Donation{
         emit VoteSubmitted(msg.sender, milestoneIndex, vote);
     }
 
-    function payout(uint milestoneIndex) public isOwner isMilestone(milestoneIndex) isCurrentMilestone(milestoneIndex) isApproved(milestoneIndex){
+    function payout(uint milestoneIndex) public isOwner onlyDuringPayout() isMilestone(milestoneIndex) isCurrentMilestone(milestoneIndex) isApproved(milestoneIndex){
         require(!milestones[milestoneIndex].paid, "This Milestone has already been paid");
         
         uint256 milestonePayout = calculatePortion(totalDonations, milestones[milestoneIndex].percentage);
-        require(address(this).balance >= milestonePayout, "Not enough funds for payout");
+        require(totalDonations >= milestonePayout, "Not enough funds for payout");
 
         milestones[milestoneIndex].paid = true;
         totalPayout += milestonePayout;
         
-        (bool success, ) = payable(contractOwner).call{value: milestonePayout}("");
-        require(success, "Send failed");
-
-        currentMilestone++;
-
+        if (currentMilestone < milestoneCount - 1){
+            currentMilestone++;
+        }else{
+            Status oldStatus = currentStatus;
+            currentStatus = Status.Closed;
+            emit StatusChanged(oldStatus, currentStatus, FailureReason.None);
+        } 
         emit PayoutMade(milestoneIndex, milestonePayout);
+
+        (bool success, ) = payable(contractOwner).call{value: milestonePayout}("");
+        require(success, "Last Payout failed");
+    }
+
+    function payoutRest() public isOwner onlyWhenClosed {
+        (bool success, ) = payable(contractOwner).call{value: address(this).balance}("");
+        require(success, "Rest Payout failed");
     }
 
     modifier isPositiveDonation(uint256 x){
@@ -165,12 +210,12 @@ contract Donation{
     }
 
     modifier isMilestone(uint256 x){
-        require(x < milestoneCount, "milestone does not exist");
+        require(x < milestoneCount, "Milestone does not exist");
         _;
     }
 
     modifier isOwner(){
-        require(msg.sender == contractOwner, "only Owner is allowed to do this");
+        require(msg.sender == contractOwner, "Only Owner is allowed to do this");
         _;
     }
 
@@ -181,7 +226,27 @@ contract Donation{
 
 
     modifier isCurrentMilestone(uint256 milestoneIndex){
-        require(milestoneIndex == currentMilestone, "chosen Milestone is not the current Milestone");
+        require(milestoneIndex == currentMilestone, "Chosen Milestone is not the current Milestone");
+        _;
+    }
+
+    modifier noOverpaying(uint256 amount) {
+        require(amount <= donationGoal - totalDonations, "They payment would exceed the needed amount");
+        _;
+    }
+
+    modifier onlyDuringFunding() {
+        require(currentStatus == Status.Funding, "Only possible while Funding");
+        _;
+    }
+
+    modifier onlyDuringPayout() {
+        require(currentStatus == Status.Payout, "Only possible in Payout Phase");
+        _;
+    }
+
+    modifier onlyWhenClosed() {
+        require(currentStatus == Status.Closed, "Only possible when project is closed");
         _;
     }
 
@@ -192,6 +257,8 @@ contract Donation{
     function getValidator(uint256 x) external view returns (address){
         return validators[x];
     }
+
+
 
     //no decimal numbers so we need basepoints
     //basepoints is 100%

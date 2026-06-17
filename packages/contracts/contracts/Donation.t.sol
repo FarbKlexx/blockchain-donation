@@ -47,8 +47,8 @@ contract DonationTest is Test {
   }
 
   function testFuzz_DonationPerDonatee(address sender, uint256 x, uint256 y) public {
-    vm.assume(x > 0 && x < 10 ether);
-    vm.assume(y > 0 && y < 10 ether);
+    vm.assume(x > 0 && x < 5 ether);
+    vm.assume(y > 0 && y < 5 ether);
     vm.assume(sender != address(0));
     vm.deal(sender, x+y);
     vm.startPrank(sender);
@@ -67,4 +67,14 @@ contract DonationTest is Test {
     vm.expectRevert();
     donation.donate{value: 5}();
   }
+
+  // function test_Funded() public {
+  //   require(donation.isFunded() == false);
+  //   donation.donate{value: 5 ether}();
+  //   require(donation.isFunded() == false);
+  //   donation.donate{value: 5 ether}();
+  //   require(donation.isFunded() == true);
+  // }
+
+
 }
