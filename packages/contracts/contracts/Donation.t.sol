@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
 import {Donation} from "./Donation.sol";
@@ -9,13 +9,17 @@ import{console2} from "forge-std/console2.sol";
 contract DonationTest is Test {
   Donation donation;
   address[] validators; 
+  uint16[] milestonePercentages;
   string description = "This is a description";
   uint256 duration = 7 days;
 
   function setUp() public {
     validators.push(makeAddr("a"));
     validators.push(makeAddr("b"));
-    donation = new Donation(10 ether, validators, description, duration);
+    milestonePercentages.push(2400);
+    milestonePercentages.push(2600);
+    milestonePercentages.push(5000);
+    donation = new Donation(msg.sender, 10 ether, validators, description, duration, milestonePercentages);
   }
 
   function test_InitialDonations() public view {

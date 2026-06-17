@@ -53,7 +53,7 @@ contract Donation{
         uint256 amount
     );
 
-    constructor(uint256 goal, address[] memory validators_, string memory description_, uint256 duration, uint16[] memory milestonePercentages){
+    constructor(address owner, uint256 goal, address[] memory validators_, string memory description_, uint256 duration, uint16[] memory milestonePercentages){
         require(goal > 0, "Donation goal must be positive");
         require(duration > 0, "Duration must be positive");
 
@@ -73,7 +73,7 @@ contract Donation{
             require(validator != address(0),"Empty address validator not allowed"
             );
 
-            require(validator != msg.sender,"Project owner cannot be a validator"
+            require(validator != owner,"Project owner cannot be a validator"
             );
 
             require(!isValidator[validator], "Validator already exists"
@@ -87,7 +87,7 @@ contract Donation{
 
         donationGoal = goal;
         description = description_;
-        contractOwner = msg.sender;
+        contractOwner = owner;
         start = block.timestamp;
         end = block.timestamp + duration;
 
