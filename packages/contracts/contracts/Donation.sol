@@ -45,7 +45,7 @@ contract Donation{
         None,
         NoFunding,
         RejectedByValidators,
-        ClosedByOwner
+        EndedByOwner
     }
 
     uint256 public neededVoteMajorityInBps = 6666;
@@ -137,6 +137,7 @@ contract Donation{
     }
 
     function enableVoting(uint256 milestoneIndex) external isOwner() onlyDuringPayout() isCurrentMilestone(milestoneIndex) {
+        require(!milestones[milestoneIndex].readyToBeApproved, "Voting has already been enabled");
         milestones[milestoneIndex].readyToBeApproved = true;
         emit VotesEnabled(milestoneIndex);
     }
@@ -153,8 +154,13 @@ contract Donation{
             milestones[milestoneIndex].rejectedCount++;
         }
 
-
         emit VoteSubmitted(msg.sender, milestoneIndex, vote);
+
+        if(calculatePercentageInBps(milestones[milestoneIndex].rejectedCount, validators.length) > basepoints-neededVoteMajorityInBps){
+            Status oldStatus = currentStatus;
+            currentStatus = Status.Failed;
+            emit StatusChanged(oldStatus, currentStatus, FailureReason.RejectedByValidators);
+        }
     }
 
     function payout(uint milestoneIndex) public isOwner onlyDuringPayout() isMilestone(milestoneIndex) isCurrentMilestone(milestoneIndex) isApproved(milestoneIndex){
@@ -182,6 +188,25 @@ contract Donation{
     function payoutRest() public isOwner onlyWhenClosed {
         (bool success, ) = payable(contractOwner).call{value: address(this).balance}("");
         require(success, "Rest Payout failed");
+    }
+
+    function markAsFailedFunding() external onlyDuringFunding {
+        require(block.timestamp > end, "Funding duration is not over yet");
+        require(totalDonations < donationGoal, "The donation Goal has been reached");
+
+        Status oldStatus = currentStatus;
+        currentStatus = Status.Failed; 
+
+        emit StatusChanged( oldStatus, currentStatus, FailureReason.NoFunding);
+    }
+
+    function endByOwner() external isOwner{
+        require(currentStatus == Status.Funding || currentStatus == Status.Payout, "failure by owner only pssible in funding or payout phase");
+        
+        Status oldStatus = currentStatus;
+        currentStatus = Status.Failed; 
+
+        emit StatusChanged( oldStatus, currentStatus, FailureReason.EndedByOwner);
     }
 
     modifier isPositiveDonation(uint256 x){
@@ -249,6 +274,7 @@ contract Donation{
         require(currentStatus == Status.Closed, "Only possible when project is closed");
         _;
     }
+
 
     function getContractBalance() external view returns (uint256){
         return address(this).balance;
