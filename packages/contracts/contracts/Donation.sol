@@ -163,7 +163,7 @@ contract Donation{
         }
     }
 
-    function payout(uint milestoneIndex) public isOwner onlyDuringPayout() isMilestone(milestoneIndex) isCurrentMilestone(milestoneIndex) isApproved(milestoneIndex){
+    function payout(uint milestoneIndex) external isOwner onlyDuringPayout() isMilestone(milestoneIndex) isCurrentMilestone(milestoneIndex) isApproved(milestoneIndex){
         require(!milestones[milestoneIndex].paid, "This Milestone has already been paid");
         
         uint256 milestonePayout = calculatePortion(totalDonations, milestones[milestoneIndex].percentage);
@@ -185,10 +185,12 @@ contract Donation{
         require(success, "Last Payout failed");
     }
 
-    function payoutRest() public isOwner onlyWhenClosed {
+    function payoutRest() external isOwner onlyWhenClosed {
         (bool success, ) = payable(contractOwner).call{value: address(this).balance}("");
         require(success, "Rest Payout failed");
     }
+
+
 
     function markAsFailedFunding() external onlyDuringFunding {
         require(block.timestamp > end, "Funding duration is not over yet");
