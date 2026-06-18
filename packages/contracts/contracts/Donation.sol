@@ -12,6 +12,8 @@ contract Donation{
 
     uint256 public totalPayout;
 
+    uint256 public refundableBalance;
+
     //solidity has no decimal numbers, so we use these variables to calculate percentages
     uint256 constant basepoints = 10000;
 
@@ -72,6 +74,11 @@ contract Donation{
 
     event RestPayoutMade(
         uint256 amount
+    );
+
+    event RefundMade(
+        address donator,
+        uint256 refundAmount
     );
 
     event StatusChanged(
@@ -160,6 +167,8 @@ contract Donation{
             Status oldStatus = currentStatus;
             currentStatus = Status.Failed;
             emit StatusChanged(oldStatus, currentStatus, FailureReason.RejectedByValidators);
+
+            refundableBalance = address(this).balance;
         }
     }
 
@@ -190,7 +199,16 @@ contract Donation{
         require(success, "Rest Payout failed");
     }
 
+    function refund() external onlyWhenFailed isDonator {
+        uint256 refundAmount = (donations[msg.sender] * refundableBalance) / totalDonations;
+        donations[msg.sender] = 0;
 
+        emit RefundMade(msg.sender, refundAmount);
+
+        (bool success, ) = payable(msg.sender).call{value: refundAmount}("");
+        require(success, "Refund failed");
+
+    }
 
     function markAsFailedFunding() external onlyDuringFunding {
         require(block.timestamp > end, "Funding duration is not over yet");
@@ -199,7 +217,9 @@ contract Donation{
         Status oldStatus = currentStatus;
         currentStatus = Status.Failed; 
 
-        emit StatusChanged( oldStatus, currentStatus, FailureReason.NoFunding);
+        emit StatusChanged(oldStatus, currentStatus, FailureReason.NoFunding);
+
+        refundableBalance = address(this).balance;
     }
 
     function endByOwner() external isOwner{
@@ -208,7 +228,9 @@ contract Donation{
         Status oldStatus = currentStatus;
         currentStatus = Status.Failed; 
 
-        emit StatusChanged( oldStatus, currentStatus, FailureReason.EndedByOwner);
+        emit StatusChanged(oldStatus, currentStatus, FailureReason.EndedByOwner);
+
+        refundableBalance = address(this).balance;
     }
 
     modifier isPositiveDonation(uint256 x){
@@ -276,6 +298,17 @@ contract Donation{
         require(currentStatus == Status.Closed, "Only possible when project is closed");
         _;
     }
+
+    modifier onlyWhenFailed() {
+        require(currentStatus == Status.Failed, "Only possible when project has failed");
+        _;
+    }
+    
+    modifier isDonator() {
+        require(donations[msg.sender] > 0, "Sender has not donated anything");
+        _;
+    }
+
 
 
     function getContractBalance() external view returns (uint256){
