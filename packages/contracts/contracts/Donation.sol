@@ -143,7 +143,7 @@ contract Donation{
         }
     }
 
-    function enableVoting(uint256 milestoneIndex) external isOwner() onlyDuringPayout() isCurrentMilestone(milestoneIndex) {
+    function enableVoting(uint256 milestoneIndex) external isOwner() onlyDuringPayout() isMilestone(milestoneIndex) isCurrentMilestone(milestoneIndex) {
         require(!milestones[milestoneIndex].readyToBeApproved, "Voting has already been enabled");
         milestones[milestoneIndex].readyToBeApproved = true;
         emit VotesEnabled(milestoneIndex);
