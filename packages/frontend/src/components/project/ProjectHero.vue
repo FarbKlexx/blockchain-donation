@@ -3,11 +3,13 @@ import { computed, ref } from 'vue'
 import type { Funding, Project } from '@/types/project'
 import { donate } from '@/services/projectsService'
 import { decimalsFor, validateAmount } from '@/utils/amount'
+import { useWalletStore } from '@/stores/wallet'
 import AppIcon from '@/components/ui/AppIcon.vue'
 
 const props = defineProps<{ project: Project }>()
 const emit = defineEmits<{ donated: [funding: Funding] }>()
 
+const wallet = useWalletStore()
 const amount = ref('')
 const submitting = ref(false)
 const error = ref<string | null>(null)
@@ -19,6 +21,12 @@ const decimals = computed(() => decimalsFor(props.project.currency))
 async function onDonate() {
   if (submitting.value) return
   error.value = null
+
+  // Login is wallet-only — donating requires a connected wallet (a signer).
+  if (!wallet.isConnected) {
+    error.value = 'Bitte logge dich zuerst oben mit deiner Wallet ein, um zu spenden.'
+    return
+  }
 
   // Validate as a decimal string (never a float) before anything is sent.
   const check = validateAmount(amount.value, decimals.value)

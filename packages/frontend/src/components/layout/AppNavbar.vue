@@ -1,23 +1,10 @@
 <script setup lang="ts">
-import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import AppLogo from '@/components/ui/AppLogo.vue'
-import { connectWallet } from '@/services/projectsService'
+import { useWalletStore } from '@/stores/wallet'
 
-const connecting = ref(false)
-const address = ref<string | null>(null)
-
-// INTEGRATION POINT: "Einloggen mit Wallet" button.
-// Currently calls the mock service. Wire to ethers signer setup.
-async function onConnect() {
-  connecting.value = true
-  try {
-    const wallet = await connectWallet()
-    address.value = wallet.address
-  } finally {
-    connecting.value = false
-  }
-}
+// "Einloggen mit Wallet" — shared wallet state (see stores/wallet.ts).
+const wallet = useWalletStore()
 </script>
 
 <template>
@@ -25,8 +12,19 @@ async function onConnect() {
     <RouterLink to="/" class="navbar__logo" aria-label="Zur Startseite">
       <AppLogo />
     </RouterLink>
-    <button class="navbar__wallet" :disabled="connecting" @click="onConnect">
-      {{ address ? address : connecting ? 'Verbinde …' : 'Einloggen mit Wallet' }}
+    <button
+      class="navbar__wallet"
+      :class="{ 'navbar__wallet--connected': wallet.isConnected }"
+      :disabled="wallet.connecting"
+      @click="wallet.connect()"
+    >
+      {{
+        wallet.address
+          ? wallet.address
+          : wallet.connecting
+            ? 'Verbinde …'
+            : 'Einloggen mit Wallet'
+      }}
     </button>
   </header>
 </template>
@@ -55,5 +53,20 @@ async function onConnect() {
 .navbar__wallet:disabled {
   opacity: 0.7;
   cursor: default;
+}
+
+/* Connected: dark surface with a green status dot before the address. */
+.navbar__wallet--connected {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.navbar__wallet--connected::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bd-green);
 }
 </style>
