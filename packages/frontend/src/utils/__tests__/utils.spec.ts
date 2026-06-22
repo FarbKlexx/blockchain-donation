@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { percentFunded, formatAmount } from '../format'
 import { validateAmount, decimalsFor } from '../amount'
+import { shortenAddress, explorerAddressUrl } from '../address'
 
 describe('percentFunded', () => {
   it('rounds and clamps to 0–100', () => {
@@ -44,5 +45,18 @@ describe('validateAmount', () => {
   it('rejects more fractional digits than the token supports', () => {
     expect(validateAmount('1.1234567', decimals).ok).toBe(false) // 7 > 6
     expect(validateAmount('1.123456', decimals).ok).toBe(true)
+  })
+})
+
+describe('address helpers', () => {
+  const full = '0x7f4b2c9d1e3a5f7c8b0d2e4a6c8f1b3d5e7089a2'
+
+  it('shortens a full address for display', () => {
+    expect(shortenAddress(full)).toBe('0x7f4...89a2')
+  })
+
+  it('derives the explorer URL from the address (fixed https scheme)', () => {
+    expect(explorerAddressUrl(full)).toBe(`https://polygonscan.com/address/${full}`)
+    expect(explorerAddressUrl(full).startsWith('https://')).toBe(true)
   })
 })

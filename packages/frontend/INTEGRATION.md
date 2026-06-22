@@ -5,21 +5,33 @@ Contract / Backend) eingehängt werden muss**. Aktuell laufen beide Screens
 (Übersicht + Detail) vollständig über **Mock-Daten** — es gibt **keine**
 Anbindung über das Frontend hinaus.
 
-## Prinzip: eine einzige Naht
+## Prinzip: eine Naht, zwei Quellen
 
 Jede Komponente liest/schreibt ausschließlich über
-**[`src/services/projectsService.ts`](src/services/projectsService.ts)**. Dieser
-Service liest heute aus **[`src/data/mockdata.json`](src/data/mockdata.json)**.
+**[`src/services/projectsService.ts`](src/services/projectsService.ts)**. Der
+Service holt **zwei getrennte Quellen** (parallel) und merged sie zum
+`Project`-Modell — die Trennung spiegelt die Produktionsarchitektur:
 
 ```
-View / Komponente ──> projectsService.ts ──> mockdata.json   (HEUTE)
-View / Komponente ──> projectsService.ts ──> ethers v6 + Contract / Metadaten  (SPÄTER)
+                              ┌─ contractData.json    (SOURCE 1: Smart Contract / ethers.js)
+View/Komponente ─> projectsService.ts ─┤
+                              └─ projectMetadata.json (SOURCE 2: Backend REST API)
+
+  HEUTE:  beide aus JSON-Mocks            SPÄTER: SOURCE 1 → ethers contract.<view>(),
+                                                  SOURCE 2 → fetch('/api/...')
 ```
 
-Beim Verdrahten ändert sich **nur der Service** (und ggf. die `.env`-Werte). Die
-Typen in [`src/types/project.ts`](src/types/project.ts), alle Komponenten und
-Views bleiben unangetastet. Die Service-Funktionen sind bereits `async` und
-geben Promises zurück, damit Lade-/Fehlerzustände schon korrekt sind.
+- **SOURCE 1 — Contract** ([`src/data/contractData.json`](src/data/contractData.json), Typen in [`types/sources.ts`](src/types/sources.ts) → `ContractCampaign`): on-chain State — `raised`, `goal`, `donors`, `daysLeft`, `verified`, `status`, `currency`, Contract-Adresse, Meilenstein-**State** (`allocated`/`status`/`confirmations`), Validator-**Set** (`address`/`uptime`).
+- **SOURCE 2 — Backend** ([`src/data/projectMetadata.json`](src/data/projectMetadata.json) → `ProjectMetadata`): off-chain Inhalte — `title`, `summary`, `description`, `image`, `category`, `news`, sowie Meilenstein-`title`/`description` und Validator-`name`/`avatar`.
+
+Der Join in `mergeProject()`: Projekt über `id`, Meilensteine über `index`, Validatoren über `address`. Der **Contract** ist autoritativ dafür, *welche* Einträge existieren; das Backend liefert nur die Anzeige-Felder.
+
+> **Explorer-URL absichtlich NICHT im Backend:** Sie wird im Frontend aus der On-Chain-Adresse gebaut ([`utils/address.ts`](src/utils/address.ts), `https://polygonscan.com/address/<addr>`). So gibt es keinen backend-kontrollierten `href` (Injection-Vektor); die Adresse bleibt die einzige Quelle. Anzeige-Kürzung (`0x7f4...89a2`) ebenfalls im Frontend.
+
+Beim Verdrahten ändern sich **nur die `fetch*`-Funktionen im Service** (und ggf.
+die `.env`-Werte). Merge, Typen ([`src/types/project.ts`](src/types/project.ts)),
+Komponenten und Views bleiben unangetastet. Die Service-Funktionen sind bereits
+`async`/parallel, damit Lade-/Fehlerzustände schon korrekt sind.
 
 > Suchhilfe im Code: alle Stellen sind mit `INTEGRATION POINT` bzw.
 > `TODO(integration)` kommentiert (`grep -rn "INTEGRATION" src`).
@@ -49,7 +61,7 @@ ethers-v6-Skizzencode in den `TODO(integration)`-Kommentaren.
 | Projekt-Detail (gesamt) | [`views/ProjectDetailView.vue`](src/views/ProjectDetailView.vue) | `getProject(id)` | Escrow-Contract des Projekts + Metadaten |
 | **Gesammelte Mittel** (Betrag, Ziel, % , Donoren, Tage übrig) | [`components/project/FundingCard.vue`](src/components/project/FundingCard.vue) | `project.funding` | `raised()`, `goal()`, `donorCount()`, `deadline()` |
 | Fortschrittsbalken | [`components/ui/ProgressBar.vue`](src/components/ui/ProgressBar.vue) | abgeleitet (`percentFunded`) | aus `raised/goal` berechnet |
-| **Smart Contract Details** (Adresse + Explorer-Link) | [`components/project/SmartContractCard.vue`](src/components/project/SmartContractCard.vue) | `project.contract` | echte Contract-Adresse + Explorer-URL (Polygonscan o. ä.) |
+| **Smart Contract Details** (Adresse + Explorer-Link) | [`components/project/SmartContractCard.vue`](src/components/project/SmartContractCard.vue) | volle Adresse aus Contract-Quelle; URL frontend-abgeleitet | echte Contract-Adresse (on-chain); Explorer-URL weiterhin im Frontend aus der Adresse gebaut |
 | **Validatoren** (Liste, Adresse, Uptime, „Aktiv") | [`components/project/ValidatorsCard.vue`](src/components/project/ValidatorsCard.vue) | `project.validators` | On-chain Validator-Set / Attestations |
 | **Meilensteine** (Status, zugeordnete Mittel, „X/3 bestätigt") | [`components/project/MilestoneCard.vue`](src/components/project/MilestoneCard.vue) | `project.milestones` | Milestone-State + Validator-Bestätigungen; (Folgeschritt) Mittel-Freigabe-Tx |
 | Tab **Beschreibung** / **Neuigkeiten** | `ProjectDetailView.vue` | `project.description` / `project.news` | Off-chain-Metadaten (kein Chain-Read) |
@@ -67,15 +79,18 @@ ethers-v6-Skizzencode in den `TODO(integration)`-Kommentaren.
 
 ## Datenmodell
 
-Alle Formen sind in [`src/types/project.ts`](src/types/project.ts) definiert und
-in jedem Feld kommentiert (Herkunft). `mockdata.json` füllt exakt diese Typen —
-die Chain-/Backend-Quelle muss später nur dieselben Objekte liefern.
+Das gemergte UI-Modell ist in [`src/types/project.ts`](src/types/project.ts)
+definiert (Herkunft je Feld kommentiert); die beiden Quell-Shapes in
+[`src/types/sources.ts`](src/types/sources.ts) (`ContractCampaign`,
+`ProjectMetadata`). Die JSON-Mocks füllen exakt diese Quell-Typen — Chain und
+Backend müssen später nur dieselben Objekte liefern.
 
 ## Konkreter erster Schritt zum Verdrahten
 
 1. Contracts kompilieren/deployen (siehe Repo-`README.md`), Adresse +
    `VITE_RPC_URL` / `VITE_DEV_PRIVATE_KEY` / `VITE_CONTRACT_ADDRESS` in
    `packages/frontend/.env` setzen.
-2. In `projectsService.ts` die `TODO(integration)`-Blöcke ersetzen:
-   `listProjects` / `getProject` (Reads) zuerst, dann `donate` / `connectWallet`
-   (Writes). Mehr ist nicht nötig — die UI bleibt unverändert.
+2. In `projectsService.ts` nur die `fetch*`-Funktionen ersetzen:
+   **SOURCE 1** (`fetchCampaigns`/`fetchCampaign`) → ethers `contract.<view>()`,
+   **SOURCE 2** (`fetchMetadata`/`fetchMetadataById`) → `fetch('/api/...')`, dann
+   `donate`/`connectWallet` (Writes). `mergeProject` und die UI bleiben unverändert.

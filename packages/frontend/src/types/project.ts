@@ -1,7 +1,8 @@
-// Domain model for the donation dApp. Today these objects are filled from
-// src/data/mockdata.json via the projects service. Later the same shapes will
-// be produced from on-chain reads + an off-chain metadata source — keeping the
-// UI untouched. See INTEGRATION.md for the per-field data origin.
+// Merged domain model for the donation dApp. The projects service builds these
+// by joining two sources — contract state (src/data/contractData.json) and
+// backend metadata (src/data/projectMetadata.json); see types/sources.ts for
+// the raw shapes. Later the same merge runs over on-chain reads + the backend
+// API, keeping the UI untouched. See INTEGRATION.md for the per-field data origin.
 
 export type ProjectStatus = 'laufend' | 'abgelaufen'
 
@@ -42,11 +43,11 @@ export interface NewsEntry {
   body: string
 }
 
-/** Smart-contract metadata shown in the sidebar. */
+/** Smart-contract info shown in the sidebar. */
 export interface ContractInfo {
-  /** Shortened contract address for display, e.g. "0x7f4...89a2". */
+  /** Full on-chain contract address (the view shortens it for display). */
   address: string
-  /** Full URL to the block explorer page for this contract. */
+  /** Explorer page URL — derived by the frontend from `address`, not stored. */
   explorerUrl: string
   /** Label for the explorer link, e.g. "View on Polygonscan". */
   explorerLabel: string

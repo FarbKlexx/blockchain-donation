@@ -28,8 +28,9 @@ const thumbStyle = computed(() => ({
   transform: `translateX(${activeIndex.value * 100}%)`,
 }))
 
-// INTEGRATION POINT: project list. Service reads mockdata today; later it reads
-// the campaign registry from the chain. Filter/sort can stay client-side.
+// INTEGRATION POINT: project list. Service merges the contract + backend mock
+// sources today; later it reads the campaign registry from the chain and the
+// metadata from the backend API. Filter/sort can stay client-side.
 async function load() {
   loading.value = true
   try {

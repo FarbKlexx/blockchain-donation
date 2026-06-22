@@ -1,30 +1,193 @@
 // ─────────────────────────────────────────────────────────────────────────
 // THE INTEGRATION SEAM.
 //
-// Every screen reads its data through this module and nothing else. Today it
-// returns data from src/data/mockdata.json. When the dApp is wired to the
-// chain, ONLY this file changes: reads become ethers `contract.<view>()` calls
-// (+ an off-chain metadata source for text/images), and the mutating functions
-// (`donate`, `connectWallet`) build and send transactions. The components,
-// views and types stay exactly as they are.
+// Every screen reads its data through this module and nothing else. The data
+// comes from TWO independent sources that mirror the production architecture:
 //
-// The functions are already async and return Promises so the UI's await/
-// loading/error handling is correct ahead of the real network calls.
+//   SOURCE 1  src/data/contractData.json     → the smart contract (ethers.js)
+//             on-chain state: financials, milestone release state, validators
+//   SOURCE 2  src/data/projectMetadata.json  → the backend REST API
+//             off-chain content: texts, images, news, display names/avatars
 //
-// See INTEGRATION.md for the full UI-element → contract-call mapping.
+// The service fetches both (in parallel), then `mergeProject()` joins them into
+// the `Project` UI model — by id (project), index (milestones), address
+// (validators). When the dApp goes live, ONLY the two fetch* groups below
+// change: contract reads become ethers `contract.<view>()` calls, metadata
+// reads become `fetch('/api/...')`. Components, views and the merge stay put.
+//
+// The functions are already async/parallel so the UI's await/loading/error
+// handling is correct ahead of the real network calls.
+//
+// See INTEGRATION.md for the full UI-element → data-source mapping.
 // ─────────────────────────────────────────────────────────────────────────
 
-import mockdata from '@/data/mockdata.json'
+import contractData from '@/data/contractData.json'
+import projectMetadata from '@/data/projectMetadata.json'
 import type { Funding, Project, ProjectFilter, ProjectSort } from '@/types/project'
+import type { ContractCampaign, ProjectMetadata } from '@/types/sources'
 import { percentFunded } from '@/utils/format'
 import { decimalsFor, validateAmount } from '@/utils/amount'
+import { explorerAddressUrl, explorerLabel } from '@/utils/address'
 
-const projects = mockdata.projects as Project[]
+// In-memory copies of the two raw sources (the campaigns array is mutated by
+// donate() to simulate on-chain state changing).
+const campaigns = contractData.campaigns as ContractCampaign[]
+const metadata = projectMetadata.projects as ProjectMetadata[]
 
 /** Simulates network/RPC latency so loading states behave like production. */
 function delay<T>(value: T, ms = 250): Promise<T> {
   return new Promise((resolve) => setTimeout(() => resolve(value), ms))
 }
+
+// ── SOURCE 1: smart contract (ethers.js) ────────────────────────────────────
+// TODO(integration): replace these with ethers reads against the registry +
+// per-campaign escrow contracts, e.g. `registry.getCampaigns()` and
+// `escrow.raised()/goal()/donorCount()/deadline()/milestones()/validators()`.
+
+async function fetchCampaigns(): Promise<ContractCampaign[]> {
+  return delay(campaigns)
+}
+
+async function fetchCampaign(id: string): Promise<ContractCampaign | null> {
+  return delay(campaigns.find((c) => c.id === id) ?? null)
+}
+
+// ── SOURCE 2: backend REST API (off-chain metadata) ─────────────────────────
+// TODO(integration): replace these with `fetch('/api/projects')` and
+// `fetch('/api/projects/' + id)` (returning the ProjectMetadata shape).
+
+async function fetchMetadata(): Promise<ProjectMetadata[]> {
+  return delay(metadata)
+}
+
+async function fetchMetadataById(id: string): Promise<ProjectMetadata | null> {
+  return delay(metadata.find((m) => m.id === id) ?? null)
+}
+
+// ── Merge: contract state (authoritative) enriched with backend metadata ─────
+
+function toFunding(c: ContractCampaign): Funding {
+  return {
+    raised: c.raised,
+    goal: c.goal,
+    donors: c.donors,
+    daysLeft: c.daysLeft,
+    timeLeftShort: c.timeLeftShort,
+  }
+}
+
+function mergeProject(c: ContractCampaign, m: ProjectMetadata): Project {
+  const metaMilestones = new Map(m.milestones.map((x) => [x.index, x]))
+  const metaValidators = new Map(m.validators.map((x) => [x.address, x]))
+
+  return {
+    id: c.id,
+    // ── from backend metadata ──
+    title: m.title,
+    summary: m.summary,
+    description: m.description,
+    image: m.image,
+    category: m.category,
+    news: m.news,
+    // ── from the contract (on-chain authoritative) ──
+    verified: c.verified,
+    currency: c.currency,
+    status: c.status,
+    funding: toFunding(c),
+    contract: {
+      // Explorer URL/label are derived from the on-chain address here, NOT
+      // supplied by the backend — no backend-controlled href.
+      address: c.address,
+      explorerUrl: explorerAddressUrl(c.address),
+      explorerLabel,
+    },
+    // ── joined: contract is the source of truth for which exist; metadata
+    //    supplies the display fields (validators by address, milestones by index) ──
+    validators: c.validators.map((v) => {
+      const meta = metaValidators.get(v.address)
+      return {
+        address: v.address,
+        uptime: v.uptime,
+        name: meta?.name ?? v.address,
+        avatar: meta?.avatar ?? '',
+      }
+    }),
+    milestones: c.milestones.map((ms) => {
+      const meta = metaMilestones.get(ms.index)
+      return {
+        index: ms.index,
+        allocated: ms.allocated,
+        status: ms.status,
+        confirmations: ms.confirmations,
+        totalValidators: ms.totalValidators,
+        title: meta?.title ?? `Meilenstein ${ms.index}`,
+        description: meta?.description ?? '',
+      }
+    }),
+  }
+}
+
+// ── Public API consumed by the views ────────────────────────────────────────
+
+export interface ListOptions {
+  filter?: ProjectFilter
+  sort?: ProjectSort
+}
+
+/**
+ * List projects for the overview grid. Reads both sources in parallel and
+ * merges; a campaign without matching metadata is skipped (logged).
+ */
+export async function listProjects(options: ListOptions = {}): Promise<Project[]> {
+  const { filter = 'laufend', sort = 'neuste' } = options
+
+  const [campaignList, metadataList] = await Promise.all([fetchCampaigns(), fetchMetadata()])
+  const metaById = new Map(metadataList.map((m) => [m.id, m]))
+
+  let result = campaignList.flatMap((c) => {
+    const meta = metaById.get(c.id)
+    if (!meta) {
+      console.warn(`[projectsService] no metadata for campaign "${c.id}" — skipped.`)
+      return []
+    }
+    return [mergeProject(c, meta)]
+  })
+
+  if (filter !== 'alle') {
+    result = result.filter((p) => p.status === filter)
+  }
+
+  switch (sort) {
+    case 'fortschritt':
+      result.sort(
+        (a, b) =>
+          percentFunded(b.funding.raised, b.funding.goal) -
+          percentFunded(a.funding.raised, a.funding.goal),
+      )
+      break
+    case 'endet_bald':
+      result.sort((a, b) => a.funding.daysLeft - b.funding.daysLeft)
+      break
+    case 'neuste':
+    default:
+      // Mock order = newest first.
+      break
+  }
+
+  return result
+}
+
+/**
+ * Load a single project for the detail page. Reads both sources in parallel;
+ * returns null if either the on-chain campaign or its metadata is missing.
+ */
+export async function getProject(id: string): Promise<Project | null> {
+  const [campaign, meta] = await Promise.all([fetchCampaign(id), fetchMetadataById(id)])
+  if (!campaign || !meta) return null
+  return mergeProject(campaign, meta)
+}
+
+// ── Mutations (write transactions) ───────────────────────────────────────────
 
 /**
  * FAIL-CLOSED GUARD for the inlined signing key.
@@ -58,58 +221,6 @@ function assertLocalSigner(): void {
   }
 }
 
-export interface ListOptions {
-  filter?: ProjectFilter
-  sort?: ProjectSort
-}
-
-/**
- * List projects for the overview grid.
- *
- * TODO(integration): replace with a read of the platform registry contract
- * (e.g. `registry.getCampaigns()`), then hydrate each campaign's text/image
- * from the off-chain metadata source. Filtering/sorting can stay client-side.
- */
-export async function listProjects(options: ListOptions = {}): Promise<Project[]> {
-  const { filter = 'laufend', sort = 'neuste' } = options
-
-  let result = projects.slice()
-
-  if (filter !== 'alle') {
-    result = result.filter((p) => p.status === filter)
-  }
-
-  switch (sort) {
-    case 'fortschritt':
-      result.sort(
-        (a, b) =>
-          percentFunded(b.funding.raised, b.funding.goal) -
-          percentFunded(a.funding.raised, a.funding.goal),
-      )
-      break
-    case 'endet_bald':
-      result.sort((a, b) => a.funding.daysLeft - b.funding.daysLeft)
-      break
-    case 'neuste':
-    default:
-      // Mock order = newest first.
-      break
-  }
-
-  return delay(result)
-}
-
-/**
- * Load a single project for the detail page.
- *
- * TODO(integration): replace with reads of the campaign's escrow contract
- * (`raised()`, `goal()`, `donorCount()`, `deadline()`, milestone state,
- * validator attestations) + off-chain metadata for description/news.
- */
-export async function getProject(id: string): Promise<Project | null> {
-  return delay(projects.find((p) => p.id === id) ?? null)
-}
-
 export interface DonationResult {
   /** Transaction hash once the donation is mined. */
   txHash: string
@@ -134,19 +245,19 @@ export interface DonationResult {
 export async function donate(projectId: string, amount: string): Promise<DonationResult> {
   assertLocalSigner()
 
-  const project = projects.find((p) => p.id === projectId)
-  if (!project) throw new Error('Projekt nicht gefunden.')
+  const campaign = campaigns.find((c) => c.id === projectId)
+  if (!campaign) throw new Error('Projekt nicht gefunden.')
 
   // Defense in depth: re-validate at the seam, not just in the UI.
-  const check = validateAmount(amount, decimalsFor(project.currency))
+  const check = validateAmount(amount, decimalsFor(campaign.currency))
   if (!check.ok) throw new Error(check.error)
 
   // [mock] Simulate a confirmed transaction mutating on-chain state. After a
   // real tx.wait(), the new figures would come from re-reading the contract.
-  project.funding.raised += Number(check.value)
-  project.funding.donors += 1
+  campaign.raised += Number(check.value)
+  campaign.donors += 1
 
-  return delay({ txHash: '0xMOCK_TX_HASH', funding: { ...project.funding } })
+  return delay({ txHash: '0xMOCK_TX_HASH', funding: toFunding(campaign) })
 }
 
 export interface WalletConnection {

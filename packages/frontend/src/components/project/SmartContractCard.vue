@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ContractInfo } from '@/types/project'
+import { shortenAddress } from '@/utils/address'
 import AppIcon from '@/components/ui/AppIcon.vue'
 
 defineProps<{ contract: ContractInfo }>()
@@ -13,14 +14,14 @@ defineProps<{ contract: ContractInfo }>()
         <span class="sc__icon"><AppIcon name="hash" :size="16" /></span>
         <div class="sc__text">
           <span class="sc__caption">Contract Adresse</span>
-          <span class="sc__value">{{ contract.address }}</span>
+          <span class="sc__value" :title="contract.address">{{ shortenAddress(contract.address) }}</span>
         </div>
       </div>
       <div class="sc__row">
         <span class="sc__icon"><AppIcon name="external-link" :size="16" /></span>
         <div class="sc__text">
           <span class="sc__caption">Explorer</span>
-          <!-- INTEGRATION POINT: explorer URL comes from contract metadata. -->
+          <!-- URL is frontend-derived from the on-chain address (utils/address.ts). -->
           <a class="sc__link" :href="contract.explorerUrl" target="_blank" rel="noopener">
             {{ contract.explorerLabel }}
           </a>

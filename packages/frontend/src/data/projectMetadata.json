@@ -1,0 +1,152 @@
+{
+  "_comment": "MOCK of SOURCE 2: the backend API (off-chain metadata). Human-readable content the frontend will later fetch over REST — texts, images, news, and the display names/avatars for milestones and validators. Joined onto contractData.json by id (project), index (milestones) and address (validators).",
+  "projects": [
+    {
+      "id": "burger-restaurant",
+      "title": "Burger Restaurant",
+      "summary": "Ein neues Burger-Restaurant mit regionalen Zutaten und nachhaltiger Küche.",
+      "description": [
+        "Das Burger Restaurant soll ein Ort für gutes Essen und gute Gespräche werden. Wir setzen auf regionale Zutaten, nachhaltige Küche und eine gemütliche Atmosphäre, in der sich Gäste wohlfühlen.",
+        "Wir planen ein Menü mit klassischen Burgern, saisonalen Spezialitäten und einer kleinen Bar. Ziel ist es, ein beliebtes Lokal zu schaffen, das sich in die Nachbarschaft einfügt und langfristig erfolgreich ist.",
+        "Mit dieser Kampagne finanzieren wir den Umbau des Lokals, die Ausstattung der Küche und den Startbetrieb. Unterstützen Sie uns dabei, ein neues kulinarisches Highlight in der Stadt zu schaffen."
+      ],
+      "image": "https://picsum.photos/seed/burger-restaurant/800/480",
+      "category": "Fairer Handel & Bio",
+      "milestones": [
+        { "index": "01", "title": "Standort-Suche & Mietvertrag", "description": "Findung des perfekten Standorts und Abschluss des Mietvertrags für das zukünftige Restaurant." },
+        { "index": "02", "title": "Küchenausstattung & Einrichtung", "description": "Anschaffung von professioneller Küchentechnik, Möbeln und Dekoration für einen einladenden Gastraum." },
+        { "index": "03", "title": "Lieferantennetzwerk & Beschaffung", "description": "Aufbau eines lokalen Lieferantennetzwerks für frische Zutaten und Abschluss der ersten Großbestellungen." },
+        { "index": "04", "title": "Marketingkampagne & Personal", "description": "Entwicklung der Markenidentität, Social-Media-Kampagne und Rekrutierung des Start-Teams." }
+      ],
+      "validators": [
+        { "address": "0x12b...c34", "name": "VeriChain Audits", "avatar": "https://i.pravatar.cc/80?img=12" },
+        { "address": "0x88f...e10", "name": "D. Weber (Lead Expert)", "avatar": "https://i.pravatar.cc/80?img=33" },
+        { "address": "0x55a...d91", "name": "SaaS DAO Nodes", "avatar": "https://i.pravatar.cc/80?img=51" }
+      ],
+      "news": [
+        {
+          "date": "2026-05-28",
+          "title": "Warum wir dieses Projekt starten",
+          "body": "Unser Ziel ist es, ein Restaurant zu schaffen, das nicht nur lecker schmeckt, sondern auch die lokale Wirtschaft stärkt. Mit deiner Unterstützung können wir die Küche ausrüsten, das Team aufbauen und die ersten Monate sichern. Jeder Beitrag hilft uns, die Vision eines fairen, regionalen Burger-Restaurants in der Innenstadt zu verwirklichen."
+        },
+        {
+          "date": "2026-06-10",
+          "title": "So werden die Mittel eingesetzt",
+          "body": "Die Mittel werden direkt in die Ausstattung der Küche, die Auswahl lokaler Lieferanten und die Eröffnungsphase investiert. Wir halten dich über jeden Schritt auf dem Laufenden – von der Planung bis zur ersten Öffnung."
+        }
+      ]
+    },
+    {
+      "id": "mesh-netzwerk-festivals",
+      "title": "Mesh-Netzwerk für Festivals",
+      "summary": "Dezentrales WLAN, das auch ohne Mobilfunk funktioniert.",
+      "description": [
+        "Auf großen Festivals bricht das Mobilfunknetz regelmäßig zusammen. Wir bauen ein dezentrales Mesh-Netzwerk aus günstigen Funkknoten, das auch bei zehntausenden Besuchern stabil bleibt.",
+        "Die Knoten sind solarbetrieben, wetterfest und in wenigen Minuten aufgebaut. Mit deiner Unterstützung finanzieren wir Hardware, Software und einen ersten Feldtest auf einem Partnerfestival."
+      ],
+      "image": "https://picsum.photos/seed/mesh-netzwerk/800/480",
+      "category": "Open Source",
+      "milestones": [
+        { "index": "01", "title": "Hardware-Beschaffung", "description": "Einkauf der Funkmodule, Solarpanels und wetterfesten Gehäuse für die erste Knotenserie." },
+        { "index": "02", "title": "Mesh-Software & Routing", "description": "Entwicklung und Härtung des selbstorganisierenden Routings für tausende gleichzeitige Geräte." },
+        { "index": "03", "title": "Feldtest auf Partnerfestival", "description": "Aufbau und Live-Test des Netzwerks unter realer Last über ein komplettes Festivalwochenende." }
+      ],
+      "validators": [
+        { "address": "0x12b...c34", "name": "VeriChain Audits", "avatar": "https://i.pravatar.cc/80?img=12" },
+        { "address": "0x88f...e10", "name": "D. Weber (Lead Expert)", "avatar": "https://i.pravatar.cc/80?img=33" },
+        { "address": "0x55a...d91", "name": "SaaS DAO Nodes", "avatar": "https://i.pravatar.cc/80?img=51" }
+      ],
+      "news": [
+        {
+          "date": "2026-06-08",
+          "title": "Erste Knoten sind da",
+          "body": "Die erste Charge der Funkmodule ist eingetroffen und die Lötarbeiten haben begonnen. Als Nächstes steht der Aufbau des Routing-Stacks an."
+        }
+      ]
+    },
+    {
+      "id": "roguelike-aetherbound",
+      "title": "Roguelike „Aetherbound“",
+      "summary": "Ein handgezeichnetes Indie-Roguelike aus einem kleinen Studio.",
+      "description": [
+        "„Aetherbound“ ist ein handgezeichnetes Action-Roguelike, das wir mit einem kleinen, unabhängigen Team entwickeln. Jeder Durchlauf ist anders, jede Entscheidung zählt.",
+        "Mit der Finanzierung sichern wir die Fertigstellung von Art, Sound und Early-Access-Version – komplett unabhängig von großen Publishern."
+      ],
+      "image": "https://picsum.photos/seed/aetherbound/800/480",
+      "category": "Games",
+      "milestones": [
+        { "index": "01", "title": "Spielbarer Prototyp", "description": "Fertigstellung des Kern-Gameplay-Loops und eines spielbaren vertikalen Slices." },
+        { "index": "02", "title": "Art & Sound", "description": "Handgezeichnete Assets, Animationen und ein adaptiver Soundtrack für die erste Welt." },
+        { "index": "03", "title": "Early-Access-Release", "description": "Politur, Balancing und Veröffentlichung der Early-Access-Version für Unterstützer." }
+      ],
+      "validators": [
+        { "address": "0x12b...c34", "name": "VeriChain Audits", "avatar": "https://i.pravatar.cc/80?img=12" },
+        { "address": "0x88f...e10", "name": "D. Weber (Lead Expert)", "avatar": "https://i.pravatar.cc/80?img=33" },
+        { "address": "0x55a...d91", "name": "SaaS DAO Nodes", "avatar": "https://i.pravatar.cc/80?img=51" }
+      ],
+      "news": [
+        {
+          "date": "2026-04-30",
+          "title": "Ziel erreicht – danke!",
+          "body": "Die Kampagne ist erfolgreich abgeschlossen. Alle Meilensteine wurden von den Validatoren bestätigt und die Mittel vollständig freigegeben."
+        }
+      ]
+    },
+    {
+      "id": "mobile-suppenkueche-berlin",
+      "title": "Mobile Suppenküche Berlin",
+      "summary": "Ein umgebauter Foodtruck für warme Mahlzeiten auf der Straße.",
+      "description": [
+        "Mit einem umgebauten Foodtruck bringen wir warme, frisch gekochte Mahlzeiten direkt zu Menschen in Not – an wechselnden Standorten in ganz Berlin.",
+        "Die Spenden finanzieren den Kauf des Fahrzeugs, den Küchenumbau und die Erstausstattung mit Zutaten für die ersten Monate."
+      ],
+      "image": "https://picsum.photos/seed/suppenkueche/800/480",
+      "category": "Soziales",
+      "milestones": [
+        { "index": "01", "title": "Foodtruck-Kauf", "description": "Anschaffung eines gebrauchten, TÜV-geprüften Transporters als Basis für die mobile Küche." },
+        { "index": "02", "title": "Küchenumbau", "description": "Einbau von Herd, Kühlung und Spüle sowie Abnahme durch das Gesundheitsamt." },
+        { "index": "03", "title": "Erstausstattung & Start", "description": "Erste Großeinkäufe an Zutaten und Verpackung für die ersten Einsätze auf der Straße." }
+      ],
+      "validators": [
+        { "address": "0x12b...c34", "name": "VeriChain Audits", "avatar": "https://i.pravatar.cc/80?img=12" },
+        { "address": "0x88f...e10", "name": "D. Weber (Lead Expert)", "avatar": "https://i.pravatar.cc/80?img=33" },
+        { "address": "0x55a...d91", "name": "SaaS DAO Nodes", "avatar": "https://i.pravatar.cc/80?img=51" }
+      ],
+      "news": [
+        {
+          "date": "2026-06-12",
+          "title": "Der Truck rollt bald",
+          "body": "Wir haben einen passenden Transporter gefunden und der Küchenumbau läuft. Bald kochen wir die erste Suppe!"
+        }
+      ]
+    },
+    {
+      "id": "wiederaufforstung-eifel",
+      "title": "Wiederaufforstung Eifel",
+      "summary": "10.000 heimische Bäume gegen Monokultur und Borkenkäfer.",
+      "description": [
+        "Die Stürme und Borkenkäfer der letzten Jahre haben in der Eifel große Kahlflächen hinterlassen. Wir pflanzen 10.000 standortgerechte, heimische Bäume und schaffen einen klimastabilen Mischwald.",
+        "Die Mittel decken Flächensicherung, Setzlinge und die organisierten Pflanzaktionen mit Freiwilligen aus der Region."
+      ],
+      "image": "https://picsum.photos/seed/eifel-wald/800/480",
+      "category": "Umwelt",
+      "milestones": [
+        { "index": "01", "title": "Flächensicherung", "description": "Pacht und rechtliche Sicherung der Aufforstungsflächen in Abstimmung mit dem Forstamt." },
+        { "index": "02", "title": "Setzlinge & Material", "description": "Einkauf von 10.000 heimischen Setzlingen, Wildschutz und Pflanzwerkzeug." },
+        { "index": "03", "title": "Pflanzaktionen", "description": "Organisation der Pflanzwochenenden mit Freiwilligen und anschließende Erstpflege." }
+      ],
+      "validators": [
+        { "address": "0x12b...c34", "name": "VeriChain Audits", "avatar": "https://i.pravatar.cc/80?img=12" },
+        { "address": "0x88f...e10", "name": "D. Weber (Lead Expert)", "avatar": "https://i.pravatar.cc/80?img=33" },
+        { "address": "0x55a...d91", "name": "SaaS DAO Nodes", "avatar": "https://i.pravatar.cc/80?img=51" }
+      ],
+      "news": [
+        {
+          "date": "2026-06-05",
+          "title": "Flächen gesichert",
+          "body": "Die ersten Aufforstungsflächen sind gepachtet und freigegeben. Jetzt sammeln wir für die Setzlinge."
+        }
+      ]
+    }
+  ]
+}
