@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import type { Project, ProjectSort, ProjectStatus } from '@/types/project'
 import { listProjects } from '@/services/projectsService'
 import ProjectCard from '@/components/project/ProjectCard.vue'
@@ -20,6 +20,13 @@ const activeFilter = ref<ProjectStatus>('laufend')
 const activeSort = ref<ProjectSort>('neuste')
 const projects = ref<Project[]>([])
 const loading = ref(true)
+
+// Sliding-thumb position for the animated segmented control.
+const activeIndex = computed(() => filters.findIndex((f) => f.value === activeFilter.value))
+const thumbStyle = computed(() => ({
+  width: `calc((100% - 4px) / ${filters.length})`,
+  transform: `translateX(${activeIndex.value * 100}%)`,
+}))
 
 // INTEGRATION POINT: project list. Service reads mockdata today; later it reads
 // the campaign registry from the chain. Filter/sort can stay client-side.
@@ -58,6 +65,7 @@ onMounted(load)
     </header>
 
     <div class="segmented" role="tablist">
+      <span class="segmented__thumb" :style="thumbStyle" aria-hidden="true" />
       <button
         v-for="f in filters"
         :key="f.value"
@@ -153,6 +161,7 @@ onMounted(load)
 }
 
 .segmented {
+  position: relative;
   display: inline-flex;
   gap: 0;
   width: 360px;
@@ -162,7 +171,23 @@ onMounted(load)
   border-radius: var(--bd-radius-sm);
 }
 
+/* The sliding surface that animates between tabs. */
+.segmented__thumb {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  border-radius: 6px;
+  background: var(--bd-surface);
+  box-shadow:
+    0 3px 4px rgba(0, 0, 0, 0.12),
+    0 3px 0.5px rgba(0, 0, 0, 0.04);
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 .segmented__tab {
+  position: relative;
+  z-index: 1;
   flex: 1 1 0;
   border: none;
   background: transparent;
@@ -171,14 +196,18 @@ onMounted(load)
   font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.24px;
-  color: var(--bd-black);
+  color: var(--bd-grey-text);
+  transition: color 0.28s ease;
 }
 
 .segmented__tab--active {
-  background: var(--bd-surface);
-  box-shadow:
-    0 3px 4px rgba(0, 0, 0, 0.12),
-    0 3px 0.5px rgba(0, 0, 0, 0.04);
+  color: var(--bd-black);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .segmented__thumb {
+    transition: none;
+  }
 }
 
 .overview__grid {

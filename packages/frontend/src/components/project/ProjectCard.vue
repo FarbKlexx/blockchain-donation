@@ -11,6 +11,27 @@ const props = defineProps<{ project: Project }>()
 const percent = computed(() =>
   percentFunded(props.project.funding.raised, props.project.funding.goal),
 )
+
+// Grey dots = milestone funding thresholds, positioned at the cumulative
+// allocated amount / goal. The final boundary (= goal, 100%) is omitted since
+// these mark the intermediate steps between milestones.
+const milestoneMarkers = computed(() => {
+  const { goal } = props.project.funding
+  const milestones = props.project.milestones
+  if (goal <= 0 || milestones.length < 2) return []
+
+  const markers: { position: number; label: string }[] = []
+  let cumulative = 0
+  // Exclude the final milestone — its cumulative equals the goal (100%).
+  for (const m of milestones.slice(0, -1)) {
+    cumulative += m.allocated
+    markers.push({
+      position: Math.min(100, (cumulative / goal) * 100),
+      label: m.title,
+    })
+  }
+  return markers
+})
 </script>
 
 <template>
@@ -43,7 +64,7 @@ const percent = computed(() =>
         </div>
       </div>
 
-      <ProgressBar :value="percent" />
+      <ProgressBar :value="percent" :markers="milestoneMarkers" />
     </div>
   </RouterLink>
 </template>
