@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import type { Project, ProjectSort, ProjectStatus } from '@/types/project'
 import { listProjects } from '@/services/projectsService'
 import ProjectCard from '@/components/project/ProjectCard.vue'
+import ProjectCardSkeleton from '@/components/project/ProjectCardSkeleton.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 
 const filters: { value: ProjectStatus; label: string }[] = [
@@ -81,7 +82,9 @@ onMounted(load)
       </button>
     </div>
 
-    <p v-if="loading" class="overview__state">Lade Projekte …</p>
+    <div v-if="loading" class="overview__grid">
+      <ProjectCardSkeleton v-for="n in 6" :key="n" />
+    </div>
     <p v-else-if="projects.length === 0" class="overview__state">
       Keine Projekte in dieser Ansicht.
     </p>

@@ -9,6 +9,7 @@ import FundingCard from '@/components/project/FundingCard.vue'
 import SmartContractCard from '@/components/project/SmartContractCard.vue'
 import ValidatorsCard from '@/components/project/ValidatorsCard.vue'
 import MilestoneCard from '@/components/project/MilestoneCard.vue'
+import ProjectDetailSkeleton from '@/components/project/ProjectDetailSkeleton.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 
 const props = defineProps<{ id: string }>()
@@ -72,11 +73,15 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
 
 <template>
   <div class="detail">
-    <p v-if="loading" class="detail__state">Lade Projekt …</p>
+    <!-- Always visible (needs no data) — keeps the layout stable across loading. -->
+    <div class="detail__topbar">
+      <RouterLink :to="{ name: 'home' }" class="detail__back">← Alle Projekte</RouterLink>
+    </div>
+
+    <ProjectDetailSkeleton v-if="loading" />
 
     <template v-else-if="project">
       <div class="detail__hero-wrap">
-        <RouterLink :to="{ name: 'home' }" class="detail__back">← Alle Projekte</RouterLink>
         <ProjectHero :project="project" @donated="onDonated" />
       </div>
 
@@ -152,7 +157,6 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
 
     <div v-else class="detail__state">
       <p>Projekt nicht gefunden.</p>
-      <RouterLink :to="{ name: 'home' }" class="detail__back">← Zurück zur Übersicht</RouterLink>
     </div>
   </div>
 </template>
@@ -168,11 +172,12 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
   color: var(--bd-grey-text);
 }
 
+.detail__topbar {
+  padding: 48px var(--bd-page-gutter) 16px;
+}
+
 .detail__hero-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 48px var(--bd-page-gutter) 32px;
+  padding: 0 var(--bd-page-gutter) 32px;
 }
 
 .detail__back {
