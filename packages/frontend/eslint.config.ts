@@ -16,7 +16,9 @@ export default defineConfigWithVueTs(
     files: ['**/*.{vue,ts,mts,tsx}'],
   },
 
-  globalIgnores(['**/dist/**', '**/dist-ssr/**', '**/coverage/**']),
+  // src/contracts/ is generated from packages/contracts on compile
+  // (copy-artifacts.js) and is gitignored — never lint generated bindings.
+  globalIgnores(['**/dist/**', '**/dist-ssr/**', '**/coverage/**', 'src/contracts/**']),
 
   ...pluginVue.configs['flat/essential'],
   vueTsConfigs.recommended,

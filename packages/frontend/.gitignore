@@ -14,6 +14,13 @@ dist-ssr
 coverage
 *.local
 
+# Environment files — keep secrets/keys out of VCS (mirrors packages/contracts).
+# VITE_* values get inlined into the client bundle, so a real key here would be
+# public; only the example template is tracked.
+.env
+.env.*
+!.env.example
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

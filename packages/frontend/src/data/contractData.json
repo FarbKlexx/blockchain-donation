@@ -1,0 +1,116 @@
+{
+  "_comment": "MOCK of SOURCE 1: the smart contract (on-chain state). This is the data the frontend will later read via ethers.js — campaign financials + milestone release state + validator attestations. Joined with projectMetadata.json by id (campaigns), index (milestones) and address (validators). INVARIANT (lifecycle Spende → Stimme → Auszahlung): validators may only vote on milestones AFTER the funding goal is reached. While raised < goal, every milestone is 'pending' with 0 confirmations; voting/release state only appears once raised >= goal (see roguelike: goal met → all confirmed; mobile-suppenkueche: goal met & still running → voting in progress).",
+  "campaigns": [
+    {
+      "id": "burger-restaurant",
+      "address": "0x7f4b2c9d1e3a5f7c8b0d2e4a6c8f1b3d5e7089a2",
+      "currency": "USDC",
+      "verified": true,
+      "status": "laufend",
+      "raised": 47520,
+      "goal": 66000,
+      "donors": 18,
+      "daysLeft": 11,
+      "timeLeftShort": "11d, 6 Std.",
+      "milestones": [
+        { "index": "01", "allocated": 12000, "status": "pending", "confirmations": 0, "totalValidators": 3 },
+        { "index": "02", "allocated": 24000, "status": "pending", "confirmations": 0, "totalValidators": 3 },
+        { "index": "03", "allocated": 18000, "status": "pending", "confirmations": 0, "totalValidators": 3 },
+        { "index": "04", "allocated": 12000, "status": "pending", "confirmations": 0, "totalValidators": 3 }
+      ],
+      "validators": [
+        { "address": "0x12b9f3a7c1e5d8b04a6f2c9e7b1d3a5f8c0e2b34" },
+        { "address": "0x88f2d4b6a8c0e2f4b6d8a0c2e4f6b8d0a2c4e610" },
+        { "address": "0x55a1c3e5b7d9f0a2c4e6b8d0f2a4c6e8b0d2f491" }
+      ]
+    },
+    {
+      "id": "mesh-netzwerk-festivals",
+      "address": "0x3a1d8c2b4e6f0a9c7b5d3e1f8a06c4b2d9e177be",
+      "currency": "USDC",
+      "verified": true,
+      "status": "laufend",
+      "raised": 8100,
+      "goal": 15000,
+      "donors": 12,
+      "daysLeft": 6,
+      "timeLeftShort": "6d, 3 Std.",
+      "milestones": [
+        { "index": "01", "allocated": 6000, "status": "pending", "confirmations": 0, "totalValidators": 3 },
+        { "index": "02", "allocated": 5000, "status": "pending", "confirmations": 0, "totalValidators": 3 },
+        { "index": "03", "allocated": 4000, "status": "pending", "confirmations": 0, "totalValidators": 3 }
+      ],
+      "validators": [
+        { "address": "0x12b9f3a7c1e5d8b04a6f2c9e7b1d3a5f8c0e2b34" },
+        { "address": "0x88f2d4b6a8c0e2f4b6d8a0c2e4f6b8d0a2c4e610" },
+        { "address": "0x55a1c3e5b7d9f0a2c4e6b8d0f2a4c6e8b0d2f491" }
+      ]
+    },
+    {
+      "id": "roguelike-aetherbound",
+      "address": "0x9c2e7b4d1a8f3c6b0d5e9a2f7c1b8d6e304541af",
+      "currency": "USDC",
+      "verified": true,
+      "status": "abgelaufen",
+      "raised": 40000,
+      "goal": 40000,
+      "donors": 64,
+      "daysLeft": 0,
+      "timeLeftShort": "Beendet",
+      "milestones": [
+        { "index": "01", "allocated": 10000, "status": "completed", "confirmations": 3, "totalValidators": 3 },
+        { "index": "02", "allocated": 15000, "status": "completed", "confirmations": 3, "totalValidators": 3 },
+        { "index": "03", "allocated": 15000, "status": "completed", "confirmations": 3, "totalValidators": 3 }
+      ],
+      "validators": [
+        { "address": "0x12b9f3a7c1e5d8b04a6f2c9e7b1d3a5f8c0e2b34" },
+        { "address": "0x88f2d4b6a8c0e2f4b6d8a0c2e4f6b8d0a2c4e610" },
+        { "address": "0x55a1c3e5b7d9f0a2c4e6b8d0f2a4c6e8b0d2f491" }
+      ]
+    },
+    {
+      "id": "mobile-suppenkueche-berlin",
+      "address": "0x4d8f1a3c5e7b9d0a2c4e6f8b1d3a5c7e9f040b73",
+      "currency": "USDC",
+      "verified": true,
+      "status": "laufend",
+      "raised": 6000,
+      "goal": 6000,
+      "donors": 44,
+      "daysLeft": 10,
+      "timeLeftShort": "10d, 0 Std.",
+      "milestones": [
+        { "index": "01", "allocated": 3500, "status": "completed", "confirmations": 3, "totalValidators": 3 },
+        { "index": "02", "allocated": 1500, "status": "in_progress", "confirmations": 2, "totalValidators": 3 },
+        { "index": "03", "allocated": 1000, "status": "pending", "confirmations": 0, "totalValidators": 3 }
+      ],
+      "validators": [
+        { "address": "0x12b9f3a7c1e5d8b04a6f2c9e7b1d3a5f8c0e2b34" },
+        { "address": "0x88f2d4b6a8c0e2f4b6d8a0c2e4f6b8d0a2c4e610" },
+        { "address": "0x55a1c3e5b7d9f0a2c4e6b8d0f2a4c6e8b0d2f491" }
+      ]
+    },
+    {
+      "id": "wiederaufforstung-eifel",
+      "address": "0x6e0b4d6f8a0c2e4b6d8f0a2c4e6b8d0f2a46a2c5",
+      "currency": "USDC",
+      "verified": true,
+      "status": "laufend",
+      "raised": 6900,
+      "goal": 30000,
+      "donors": 27,
+      "daysLeft": 18,
+      "timeLeftShort": "18d, 7 Std.",
+      "milestones": [
+        { "index": "01", "allocated": 8000, "status": "pending", "confirmations": 0, "totalValidators": 3 },
+        { "index": "02", "allocated": 12000, "status": "pending", "confirmations": 0, "totalValidators": 3 },
+        { "index": "03", "allocated": 10000, "status": "pending", "confirmations": 0, "totalValidators": 3 }
+      ],
+      "validators": [
+        { "address": "0x12b9f3a7c1e5d8b04a6f2c9e7b1d3a5f8c0e2b34" },
+        { "address": "0x88f2d4b6a8c0e2f4b6d8a0c2e4f6b8d0a2c4e610" },
+        { "address": "0x55a1c3e5b7d9f0a2c4e6b8d0f2a4c6e8b0d2f491" }
+      ]
+    }
+  ]
+}
