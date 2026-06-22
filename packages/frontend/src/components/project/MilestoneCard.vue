@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import type { Milestone, MilestoneStatus, Validator } from '@/types/project'
 import { formatAmount } from '@/utils/format'
+import { addressGradient } from '@/utils/address'
 import AppIcon from '@/components/ui/AppIcon.vue'
 
 const props = defineProps<{
@@ -18,11 +19,11 @@ const statusMeta: Record<MilestoneStatus, { label: string; variant: string }> = 
 
 const status = computed(() => statusMeta[props.milestone.status])
 
-// Show one avatar per required validator; the first `confirmations` are checked.
+// One identicon per required validator; the first `confirmations` are checked.
 const avatars = computed(() =>
   props.validators.slice(0, props.milestone.totalValidators).map((v, i) => ({
-    src: v.avatar,
-    name: v.name,
+    address: v.address,
+    gradient: addressGradient(v.address),
     confirmed: i < props.milestone.confirmations,
   })),
 )
@@ -47,8 +48,8 @@ const avatars = computed(() =>
       </div>
       <div class="ms__confirm">
         <div class="ms__avatars">
-          <span v-for="(a, i) in avatars" :key="i" class="ms__avatar">
-            <img :src="a.src" :alt="a.name" loading="lazy" />
+          <span v-for="(a, i) in avatars" :key="i" class="ms__avatar" :title="a.address">
+            <span class="ms__avatar-img" :style="{ background: a.gradient }" />
             <span v-if="a.confirmed" class="ms__check"><AppIcon name="check" :size="8" /></span>
           </span>
         </div>
@@ -186,11 +187,11 @@ const avatars = computed(() =>
   margin-left: 0;
 }
 
-.ms__avatar img {
+.ms__avatar-img {
+  display: block;
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  object-fit: cover;
   border: 2px solid var(--bd-surface);
   background: var(--bd-grey);
 }

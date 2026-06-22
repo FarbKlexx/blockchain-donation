@@ -78,7 +78,6 @@ function toFunding(c: ContractCampaign): Funding {
 
 function mergeProject(c: ContractCampaign, m: ProjectMetadata): Project {
   const metaMilestones = new Map(m.milestones.map((x) => [x.index, x]))
-  const metaValidators = new Map(m.validators.map((x) => [x.address, x]))
 
   return {
     id: c.id,
@@ -101,17 +100,11 @@ function mergeProject(c: ContractCampaign, m: ProjectMetadata): Project {
       explorerUrl: explorerAddressUrl(c.address),
       explorerLabel,
     },
-    // ── joined: contract is the source of truth for which exist; metadata
-    //    supplies the display fields (validators by address, milestones by index) ──
-    validators: c.validators.map((v) => {
-      const meta = metaValidators.get(v.address)
-      return {
-        address: v.address,
-        uptime: v.uptime,
-        name: meta?.name ?? v.address,
-        avatar: meta?.avatar ?? '',
-      }
-    }),
+    // Validators come straight from the contract — anonymous addresses, no
+    // backend join, no activity tracking. The view derives an identicon + short
+    // label from each address.
+    validators: c.validators.map((v) => ({ address: v.address })),
+    // Milestones: contract owns the state/order; metadata supplies title/desc.
     milestones: c.milestones.map((ms) => {
       const meta = metaMilestones.get(ms.index)
       return {

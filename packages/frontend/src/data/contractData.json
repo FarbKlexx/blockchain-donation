@@ -19,9 +19,9 @@
         { "index": "04", "allocated": 12000, "status": "pending", "confirmations": 0, "totalValidators": 3 }
       ],
       "validators": [
-        { "address": "0x12b...c34", "uptime": 99.2 },
-        { "address": "0x88f...e10", "uptime": 100 },
-        { "address": "0x55a...d91", "uptime": 96.5 }
+        { "address": "0x12b9f3a7c1e5d8b04a6f2c9e7b1d3a5f8c0e2b34" },
+        { "address": "0x88f2d4b6a8c0e2f4b6d8a0c2e4f6b8d0a2c4e610" },
+        { "address": "0x55a1c3e5b7d9f0a2c4e6b8d0f2a4c6e8b0d2f491" }
       ]
     },
     {
@@ -41,9 +41,9 @@
         { "index": "03", "allocated": 4000, "status": "pending", "confirmations": 0, "totalValidators": 3 }
       ],
       "validators": [
-        { "address": "0x12b...c34", "uptime": 99.2 },
-        { "address": "0x88f...e10", "uptime": 100 },
-        { "address": "0x55a...d91", "uptime": 96.5 }
+        { "address": "0x12b9f3a7c1e5d8b04a6f2c9e7b1d3a5f8c0e2b34" },
+        { "address": "0x88f2d4b6a8c0e2f4b6d8a0c2e4f6b8d0a2c4e610" },
+        { "address": "0x55a1c3e5b7d9f0a2c4e6b8d0f2a4c6e8b0d2f491" }
       ]
     },
     {
@@ -63,9 +63,9 @@
         { "index": "03", "allocated": 15000, "status": "completed", "confirmations": 3, "totalValidators": 3 }
       ],
       "validators": [
-        { "address": "0x12b...c34", "uptime": 99.2 },
-        { "address": "0x88f...e10", "uptime": 100 },
-        { "address": "0x55a...d91", "uptime": 96.5 }
+        { "address": "0x12b9f3a7c1e5d8b04a6f2c9e7b1d3a5f8c0e2b34" },
+        { "address": "0x88f2d4b6a8c0e2f4b6d8a0c2e4f6b8d0a2c4e610" },
+        { "address": "0x55a1c3e5b7d9f0a2c4e6b8d0f2a4c6e8b0d2f491" }
       ]
     },
     {
@@ -85,9 +85,9 @@
         { "index": "03", "allocated": 1000, "status": "pending", "confirmations": 0, "totalValidators": 3 }
       ],
       "validators": [
-        { "address": "0x12b...c34", "uptime": 99.2 },
-        { "address": "0x88f...e10", "uptime": 100 },
-        { "address": "0x55a...d91", "uptime": 96.5 }
+        { "address": "0x12b9f3a7c1e5d8b04a6f2c9e7b1d3a5f8c0e2b34" },
+        { "address": "0x88f2d4b6a8c0e2f4b6d8a0c2e4f6b8d0a2c4e610" },
+        { "address": "0x55a1c3e5b7d9f0a2c4e6b8d0f2a4c6e8b0d2f491" }
       ]
     },
     {
@@ -107,9 +107,9 @@
         { "index": "03", "allocated": 10000, "status": "pending", "confirmations": 0, "totalValidators": 3 }
       ],
       "validators": [
-        { "address": "0x12b...c34", "uptime": 99.2 },
-        { "address": "0x88f...e10", "uptime": 100 },
-        { "address": "0x55a...d91", "uptime": 96.5 }
+        { "address": "0x12b9f3a7c1e5d8b04a6f2c9e7b1d3a5f8c0e2b34" },
+        { "address": "0x88f2d4b6a8c0e2f4b6d8a0c2e4f6b8d0a2c4e610" },
+        { "address": "0x55a1c3e5b7d9f0a2c4e6b8d0f2a4c6e8b0d2f491" }
       ]
     }
   ]

@@ -8,16 +8,12 @@ export type ProjectStatus = 'laufend' | 'abgelaufen'
 
 export type MilestoneStatus = 'completed' | 'in_progress' | 'pending'
 
-/** A validator/attester shown on the project detail page. */
+/** A validator/attester shown on the project detail page. Anonymous: there is
+ *  no user system and no activity tracking, so a validator IS its on-chain
+ *  address (the view derives a deterministic identicon + a shortened label). */
 export interface Validator {
-  /** Display name, e.g. "VeriChain Audits". */
-  name: string
-  /** Shortened on-chain address, e.g. "0x12b...c34". */
+  /** Full on-chain validator address. */
   address: string
-  /** Avatar image URL. */
-  avatar: string
-  /** Uptime / reliability score in percent (0–100). */
-  uptime: number
 }
 
 /** A funding milestone whose release is gated by validator confirmations. */

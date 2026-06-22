@@ -21,12 +21,14 @@ View/Komponente ─> projectsService.ts ─┤
                                                   SOURCE 2 → fetch('/api/...')
 ```
 
-- **SOURCE 1 — Contract** ([`src/data/contractData.json`](src/data/contractData.json), Typen in [`types/sources.ts`](src/types/sources.ts) → `ContractCampaign`): on-chain State — `raised`, `goal`, `donors`, `daysLeft`, `verified`, `status`, `currency`, Contract-Adresse, Meilenstein-**State** (`allocated`/`status`/`confirmations`), Validator-**Set** (`address`/`uptime`).
-- **SOURCE 2 — Backend** ([`src/data/projectMetadata.json`](src/data/projectMetadata.json) → `ProjectMetadata`): off-chain Inhalte — `title`, `summary`, `description`, `image`, `category`, `news`, sowie Meilenstein-`title`/`description` und Validator-`name`/`avatar`.
+- **SOURCE 1 — Contract** ([`src/data/contractData.json`](src/data/contractData.json), Typen in [`types/sources.ts`](src/types/sources.ts) → `ContractCampaign`): on-chain State — `raised`, `goal`, `donors`, `daysLeft`, `verified`, `status`, `currency`, Contract-Adresse, Meilenstein-**State** (`allocated`/`status`/`confirmations`), Validator-**Set** (`address`).
+- **SOURCE 2 — Backend** ([`src/data/projectMetadata.json`](src/data/projectMetadata.json) → `ProjectMetadata`): off-chain Inhalte — `title`, `summary`, `description`, `image`, `category`, `news`, sowie Meilenstein-`title`/`description`.
 
-Der Join in `mergeProject()`: Projekt über `id`, Meilensteine über `index`, Validatoren über `address`. Der **Contract** ist autoritativ dafür, *welche* Einträge existieren; das Backend liefert nur die Anzeige-Felder.
+Der Join in `mergeProject()`: Projekt über `id`, Meilensteine über `index`. Validatoren kommen **ausschließlich vom Contract** (kein Join). Der **Contract** ist autoritativ dafür, *welche* Einträge existieren; das Backend liefert nur die Anzeige-Texte.
 
-> **Explorer-URL absichtlich NICHT im Backend:** Sie wird im Frontend aus der On-Chain-Adresse gebaut ([`utils/address.ts`](src/utils/address.ts), `https://polygonscan.com/address/<addr>`). So gibt es keinen backend-kontrollierten `href` (Injection-Vektor); die Adresse bleibt die einzige Quelle. Anzeige-Kürzung (`0x7f4...89a2`) ebenfalls im Frontend.
+> **Bewusst NICHT im Backend (Sicherheit / Anonymität):**
+> - **Explorer-URL** wird im Frontend aus der On-Chain-Adresse gebaut ([`utils/address.ts`](src/utils/address.ts), `https://polygonscan.com/address/<addr>`) — kein backend-kontrollierter `href` (Injection-Vektor), die Adresse bleibt die einzige Quelle. Anzeige-Kürzung (`0x7f4...89a2`) ebenfalls im Frontend.
+> - **Validatoren** sind anonyme Adressen (Wallet-Login, kein User-System, kein Aktivitäts-Tracking) — **keine** Namen, Foto-Avatare oder Uptime/„Aktiv"-Status. Das Set (nur Adressen) kommt vom Contract; Avatar = deterministischer Identicon aus der Adresse, Label = gekürzte Adresse (beides Frontend, aus der Adresse abgeleitet).
 
 Beim Verdrahten ändern sich **nur die `fetch*`-Funktionen im Service** (und ggf.
 die `.env`-Werte). Merge, Typen ([`src/types/project.ts`](src/types/project.ts)),
@@ -62,7 +64,7 @@ ethers-v6-Skizzencode in den `TODO(integration)`-Kommentaren.
 | **Gesammelte Mittel** (Betrag, Ziel, % , Donoren, Tage übrig) | [`components/project/FundingCard.vue`](src/components/project/FundingCard.vue) | `project.funding` | `raised()`, `goal()`, `donorCount()`, `deadline()` |
 | Fortschrittsbalken | [`components/ui/ProgressBar.vue`](src/components/ui/ProgressBar.vue) | abgeleitet (`percentFunded`) | aus `raised/goal` berechnet |
 | **Smart Contract Details** (Adresse + Explorer-Link) | [`components/project/SmartContractCard.vue`](src/components/project/SmartContractCard.vue) | volle Adresse aus Contract-Quelle; URL frontend-abgeleitet | echte Contract-Adresse (on-chain); Explorer-URL weiterhin im Frontend aus der Adresse gebaut |
-| **Validatoren** (Liste, Adresse, Uptime, „Aktiv") | [`components/project/ValidatorsCard.vue`](src/components/project/ValidatorsCard.vue) | `project.validators` | On-chain Validator-Set / Attestations |
+| **Validatoren** (Liste anonymer Adressen) | [`components/project/ValidatorsCard.vue`](src/components/project/ValidatorsCard.vue) | `project.validators` | On-chain Validator-Set (nur Adressen) |
 | **Meilensteine** (Status, zugeordnete Mittel, „X/3 bestätigt") | [`components/project/MilestoneCard.vue`](src/components/project/MilestoneCard.vue) | `project.milestones` | Milestone-State + Validator-Bestätigungen; (Folgeschritt) Mittel-Freigabe-Tx |
 | Tab **Beschreibung** / **Neuigkeiten** | `ProjectDetailView.vue` | `project.description` / `project.news` | Off-chain-Metadaten (kein Chain-Read) |
 

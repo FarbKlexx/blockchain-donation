@@ -20,10 +20,9 @@ export interface ContractMilestone {
   totalValidators: number
 }
 
-/** A validator address + its on-chain reliability score. */
+/** A validator participating in a campaign — just its on-chain address. */
 export interface ContractValidator {
   address: string
-  uptime: number
 }
 
 /** A campaign as read from the contract — financials + release state, no prose. */
@@ -53,12 +52,6 @@ export interface MetadataMilestone {
   description: string
 }
 
-export interface MetadataValidator {
-  address: string
-  name: string
-  avatar: string
-}
-
 export interface MetadataNews {
   date: string
   title: string
@@ -67,7 +60,8 @@ export interface MetadataNews {
 
 /** Human-readable content for a project, served by the backend. */
 // Note: no explorer URL here — the frontend derives it from the on-chain
-// address (see utils/address.ts) to avoid a backend-controlled href.
+// address (utils/address.ts). No validators here either — they are anonymous
+// on-chain addresses (no user system), so they come purely from the contract.
 export interface ProjectMetadata {
   id: string
   title: string
@@ -76,6 +70,5 @@ export interface ProjectMetadata {
   image: string
   category: string
   milestones: MetadataMilestone[]
-  validators: MetadataValidator[]
   news: MetadataNews[]
 }
