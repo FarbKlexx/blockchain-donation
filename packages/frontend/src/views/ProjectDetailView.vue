@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { Funding, Project } from '@/types/project'
 import { getProject } from '@/services/projectsService'
@@ -24,6 +24,19 @@ const project = ref<Project | null>(null)
 const loading = ref(true)
 const activeTab = ref<TabKey>('beschreibung')
 
+// Sliding underline: tabs are variable-width, so we measure the active tab's
+// position/width and move a single underline there (animated via CSS).
+const tabRow = ref<HTMLElement | null>(null)
+const indicator = ref({ left: 0, width: 0 })
+
+function updateIndicator() {
+  const row = tabRow.value
+  if (!row) return
+  const idx = tabs.findIndex((t) => t.key === activeTab.value)
+  const el = row.children[idx] as HTMLElement | undefined
+  if (el) indicator.value = { left: el.offsetLeft, width: el.offsetWidth }
+}
+
 async function load() {
   loading.value = true
   activeTab.value = 'beschreibung'
@@ -32,6 +45,8 @@ async function load() {
   } finally {
     loading.value = false
   }
+  await nextTick()
+  updateIndicator()
 }
 
 // Apply the authoritative funding the service returns AFTER the tx confirmed
@@ -42,8 +57,17 @@ function onDonated(funding: Funding) {
   }
 }
 
+// Re-measure the underline when the tab changes, the window resizes, or the
+// web font finishes loading (which changes text widths).
+watch(activeTab, () => nextTick(updateIndicator))
 watch(() => props.id, load)
-onMounted(load)
+
+onMounted(() => {
+  load()
+  window.addEventListener('resize', updateIndicator)
+  document.fonts?.ready.then(updateIndicator)
+})
+onUnmounted(() => window.removeEventListener('resize', updateIndicator))
 </script>
 
 <template>
@@ -61,7 +85,7 @@ onMounted(load)
           <h2 class="detail__heading">Über das Projekt</h2>
 
           <div class="tabs">
-            <div class="tabs__row" role="tablist">
+            <div ref="tabRow" class="tabs__row" role="tablist">
               <button
                 v-for="t in tabs"
                 :key="t.key"
@@ -73,8 +97,12 @@ onMounted(load)
                 @click="activeTab = t.key"
               >
                 {{ t.label }}
-                <span class="tabs__indicator" :class="{ 'tabs__indicator--active': activeTab === t.key }" />
               </button>
+              <span
+                class="tabs__underline"
+                :style="{ width: indicator.width + 'px', transform: `translateX(${indicator.left}px)` }"
+                aria-hidden="true"
+              />
             </div>
             <div class="tabs__divider" />
           </div>
@@ -194,21 +222,19 @@ onMounted(load)
 }
 
 .tabs__row {
+  position: relative;
   display: flex;
   gap: 32px;
 }
 
 .tabs__tab {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
   border: none;
   background: transparent;
   padding: 0 0 8px;
   font-size: 14px;
   font-weight: 500;
   color: var(--bd-grey-text);
+  transition: color 0.28s ease;
 }
 
 .tabs__tab--active {
@@ -216,22 +242,27 @@ onMounted(load)
   color: var(--bd-black);
 }
 
-.tabs__indicator {
+/* Single underline that slides/stretches to the active tab. */
+.tabs__underline {
   position: absolute;
   left: 0;
-  right: 0;
   bottom: 0;
   height: 2px;
-  background: transparent;
-}
-
-.tabs__indicator--active {
   background: var(--bd-black);
+  transition:
+    transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+    width 0.28s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .tabs__divider {
   height: 1px;
   background: var(--bd-divider);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tabs__underline {
+    transition: none;
+  }
 }
 
 /* Beschreibung */
