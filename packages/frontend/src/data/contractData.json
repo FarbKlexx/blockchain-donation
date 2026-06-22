@@ -1,5 +1,5 @@
 {
-  "_comment": "MOCK of SOURCE 1: the smart contract (on-chain state). This is the data the frontend will later read via ethers.js — campaign financials + milestone release state + validator attestations. Joined with projectMetadata.json by id (campaigns), index (milestones) and address (validators).",
+  "_comment": "MOCK of SOURCE 1: the smart contract (on-chain state). This is the data the frontend will later read via ethers.js — campaign financials + milestone release state + validator attestations. Joined with projectMetadata.json by id (campaigns), index (milestones) and address (validators). INVARIANT (lifecycle Spende → Stimme → Auszahlung): validators may only vote on milestones AFTER the funding goal is reached. While raised < goal, every milestone is 'pending' with 0 confirmations; voting/release state only appears once raised >= goal (see roguelike: goal met → all confirmed; mobile-suppenkueche: goal met & still running → voting in progress).",
   "campaigns": [
     {
       "id": "burger-restaurant",
@@ -13,9 +13,9 @@
       "daysLeft": 11,
       "timeLeftShort": "11d, 6 Std.",
       "milestones": [
-        { "index": "01", "allocated": 12000, "status": "completed", "confirmations": 3, "totalValidators": 3 },
-        { "index": "02", "allocated": 24000, "status": "completed", "confirmations": 3, "totalValidators": 3 },
-        { "index": "03", "allocated": 18000, "status": "in_progress", "confirmations": 1, "totalValidators": 3 },
+        { "index": "01", "allocated": 12000, "status": "pending", "confirmations": 0, "totalValidators": 3 },
+        { "index": "02", "allocated": 24000, "status": "pending", "confirmations": 0, "totalValidators": 3 },
+        { "index": "03", "allocated": 18000, "status": "pending", "confirmations": 0, "totalValidators": 3 },
         { "index": "04", "allocated": 12000, "status": "pending", "confirmations": 0, "totalValidators": 3 }
       ],
       "validators": [
@@ -36,8 +36,8 @@
       "daysLeft": 6,
       "timeLeftShort": "6d, 3 Std.",
       "milestones": [
-        { "index": "01", "allocated": 6000, "status": "completed", "confirmations": 3, "totalValidators": 3 },
-        { "index": "02", "allocated": 5000, "status": "in_progress", "confirmations": 2, "totalValidators": 3 },
+        { "index": "01", "allocated": 6000, "status": "pending", "confirmations": 0, "totalValidators": 3 },
+        { "index": "02", "allocated": 5000, "status": "pending", "confirmations": 0, "totalValidators": 3 },
         { "index": "03", "allocated": 4000, "status": "pending", "confirmations": 0, "totalValidators": 3 }
       ],
       "validators": [
@@ -74,9 +74,9 @@
       "currency": "USDC",
       "verified": true,
       "status": "laufend",
-      "raised": 5460,
+      "raised": 6000,
       "goal": 6000,
-      "donors": 41,
+      "donors": 44,
       "daysLeft": 10,
       "timeLeftShort": "10d, 0 Std.",
       "milestones": [
@@ -102,8 +102,8 @@
       "daysLeft": 18,
       "timeLeftShort": "18d, 7 Std.",
       "milestones": [
-        { "index": "01", "allocated": 8000, "status": "completed", "confirmations": 3, "totalValidators": 3 },
-        { "index": "02", "allocated": 12000, "status": "in_progress", "confirmations": 1, "totalValidators": 3 },
+        { "index": "01", "allocated": 8000, "status": "pending", "confirmations": 0, "totalValidators": 3 },
+        { "index": "02", "allocated": 12000, "status": "pending", "confirmations": 0, "totalValidators": 3 },
         { "index": "03", "allocated": 10000, "status": "pending", "confirmations": 0, "totalValidators": 3 }
       ],
       "validators": [

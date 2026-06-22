@@ -105,6 +105,10 @@ function mergeProject(c: ContractCampaign, m: ProjectMetadata): Project {
     // label from each address.
     validators: c.validators.map((v) => ({ address: v.address })),
     // Milestones: contract owns the state/order; metadata supplies title/desc.
+    // Lifecycle invariant (Spende → Stimme → Auszahlung): a milestone's
+    // confirmations/status are only meaningful once raised >= goal — validators
+    // cannot vote before the funding goal is reached. The detail view enforces
+    // this on the presentation side (see ProjectDetailView `goalReached`).
     milestones: c.milestones.map((ms) => {
       const meta = metaMilestones.get(ms.index)
       return {

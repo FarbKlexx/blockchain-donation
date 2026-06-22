@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { Funding, Project } from '@/types/project'
 import { getProject } from '@/services/projectsService'
@@ -24,6 +24,13 @@ const tabs: { key: TabKey; label: string }[] = [
 const project = ref<Project | null>(null)
 const loading = ref(true)
 const activeTab = ref<TabKey>('beschreibung')
+
+// Lifecycle gate (Spende → Stimme → Auszahlung): validators may only vote on
+// milestones once the funding goal is reached. The milestone UI keys off this,
+// so it can never present confirmations before the goal is met.
+const goalReached = computed(
+  () => !!project.value && project.value.funding.raised >= project.value.funding.goal,
+)
 
 // Sliding underline: tabs are variable-width, so we measure the active tab's
 // position/width and move a single underline there (animated via CSS).
@@ -120,8 +127,12 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
           <!-- Meilensteine -->
           <div v-else-if="activeTab === 'meilensteine'" class="milestones">
             <p class="milestones__hint">
-              <AppIcon name="circle-help" :size="14" />
-              Gelder werden erst freigegeben, wenn alle Validatoren bestätigen
+              <AppIcon :name="goalReached ? 'circle-help' : 'lock'" :size="14" />
+              {{
+                goalReached
+                  ? 'Validatoren stimmen über jeden Meilenstein ab — Gelder werden erst nach deren Bestätigung freigegeben.'
+                  : 'Die Abstimmung über die Meilensteine beginnt erst, sobald das Finanzierungsziel erreicht ist.'
+              }}
             </p>
             <div class="milestones__list">
               <MilestoneCard
@@ -130,6 +141,7 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
                 :milestone="m"
                 :validators="project.validators"
                 :currency="project.currency"
+                :voting-open="goalReached"
               />
             </div>
           </div>

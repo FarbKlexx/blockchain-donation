@@ -9,6 +9,10 @@ const props = defineProps<{
   milestone: Milestone
   validators: Validator[]
   currency: string
+  /** Whether the funding goal is reached. Validators can only vote on
+   *  milestones AFTER the goal is met — until then this card stays locked,
+   *  so it can never display confirmations that the concept forbids. */
+  votingOpen: boolean
 }>()
 
 const statusMeta: Record<MilestoneStatus, { label: string; variant: string }> = {
@@ -36,7 +40,13 @@ const avatars = computed(() =>
         <span class="ms__number">{{ milestone.index }}</span>
         <h3 class="ms__title">{{ milestone.title }}</h3>
       </div>
-      <span class="ms__badge" :class="`ms__badge--${status.variant}`">{{ status.label }}</span>
+      <span v-if="votingOpen" class="ms__badge" :class="`ms__badge--${status.variant}`">
+        {{ status.label }}
+      </span>
+      <span v-else class="ms__badge ms__badge--locked">
+        <AppIcon name="lock" :size="11" />
+        Gesperrt
+      </span>
     </div>
 
     <p class="ms__description">{{ milestone.description }}</p>
@@ -46,7 +56,9 @@ const avatars = computed(() =>
         <span class="ms__funds-label">Zugeordnete Mittel</span>
         <span class="ms__funds-value">{{ formatAmount(milestone.allocated) }} {{ currency }}</span>
       </div>
-      <div class="ms__confirm">
+      <!-- Validator confirmations are only shown once voting has opened
+           (funding goal reached). Before that, the milestone is locked. -->
+      <div v-if="votingOpen" class="ms__confirm">
         <div class="ms__avatars">
           <span v-for="(a, i) in avatars" :key="i" class="ms__avatar" :title="a.address">
             <span class="ms__avatar-img" :style="{ background: a.gradient }" />
@@ -56,6 +68,10 @@ const avatars = computed(() =>
         <span class="ms__confirm-text">
           {{ milestone.confirmations }}/{{ milestone.totalValidators }} Validatoren bestätigt
         </span>
+      </div>
+      <div v-else class="ms__locked">
+        <AppIcon name="lock" :size="14" />
+        <span>Abstimmung startet nach Zielerreichung</span>
       </div>
     </div>
   </article>
@@ -108,6 +124,9 @@ const avatars = computed(() =>
 }
 
 .ms__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   padding: 4px 10px;
   border-radius: var(--bd-radius-pill);
   font-size: 12px;
@@ -132,6 +151,12 @@ const avatars = computed(() =>
   color: var(--bd-neutral);
   background: var(--bd-neutral-tint);
   border-color: var(--bd-neutral);
+}
+
+.ms__badge--locked {
+  color: var(--bd-grey-text);
+  background: var(--bd-grey);
+  border-color: var(--bd-stroke);
 }
 
 .ms__description {
@@ -212,6 +237,14 @@ const avatars = computed(() =>
 }
 
 .ms__confirm-text {
+  font-size: 12px;
+  color: var(--bd-grey-text);
+}
+
+.ms__locked {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   color: var(--bd-grey-text);
 }

@@ -65,7 +65,8 @@ ethers-v6-Skizzencode in den `TODO(integration)`-Kommentaren.
 | Fortschrittsbalken | [`components/ui/ProgressBar.vue`](src/components/ui/ProgressBar.vue) | abgeleitet (`percentFunded`) | aus `raised/goal` berechnet |
 | **Smart Contract Details** (Adresse + Explorer-Link) | [`components/project/SmartContractCard.vue`](src/components/project/SmartContractCard.vue) | volle Adresse aus Contract-Quelle; URL frontend-abgeleitet | echte Contract-Adresse (on-chain); Explorer-URL weiterhin im Frontend aus der Adresse gebaut |
 | **Validatoren** (Liste anonymer Adressen) | [`components/project/ValidatorsCard.vue`](src/components/project/ValidatorsCard.vue) | `project.validators` | On-chain Validator-Set (nur Adressen) |
-| **Meilensteine** (Status, zugeordnete Mittel, „X/3 bestätigt") | [`components/project/MilestoneCard.vue`](src/components/project/MilestoneCard.vue) | `project.milestones` | Milestone-State + Validator-Bestätigungen; (Folgeschritt) Mittel-Freigabe-Tx |
+| **Meilensteine** (Status, zugeordnete Mittel, „X/3 bestätigt") | [`components/project/MilestoneCard.vue`](src/components/project/MilestoneCard.vue) | `project.milestones` + `goalReached` (`raised >= goal`) | Milestone-State + Validator-Bestätigungen; (Folgeschritt) Mittel-Freigabe-Tx |
+| **Meilenstein-Abstimmung gesperrt/offen** | `ProjectDetailView.vue` → `votingOpen`-Prop | abgeleitet aus `funding` | Lifecycle-Invariante **Spende → Stimme → Auszahlung**: Validatoren stimmen erst ab, **nachdem das Ziel erreicht ist**. Bis dahin sind alle Meilensteine gesperrt (0 Bestätigungen). Der Contract erzwingt das on-chain; das Frontend spiegelt es. |
 | Tab **Beschreibung** / **Neuigkeiten** | `ProjectDetailView.vue` | `project.description` / `project.news` | Off-chain-Metadaten (kein Chain-Read) |
 
 ---
