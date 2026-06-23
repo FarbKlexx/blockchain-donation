@@ -12,7 +12,7 @@
         "Wir planen ein Menü mit klassischen Burgern, saisonalen Spezialitäten und einer kleinen Bar. Ziel ist es, ein beliebtes Lokal zu schaffen, das sich in die Nachbarschaft einfügt und langfristig erfolgreich ist.",
         "Mit dieser Kampagne finanzieren wir den Umbau des Lokals, die Ausstattung der Küche und den Startbetrieb. Unterstützen Sie uns dabei, ein neues kulinarisches Highlight in der Stadt zu schaffen."
       ],
-      "image": "https://picsum.photos/seed/burger-restaurant/800/480",
+      "image": "uploads/burger-restaurant/cover.jpg",
       "category": "Fairer Handel & Bio",
       "milestones": [
         { "index": "01", "title": "Standort-Suche & Mietvertrag", "description": "Findung des perfekten Standorts und Abschluss des Mietvertrags für das zukünftige Restaurant." },
@@ -26,9 +26,9 @@
           "title": "Warum wir dieses Projekt starten",
           "body": "Unser Ziel ist es, ein Restaurant zu schaffen, das nicht nur lecker schmeckt, sondern auch die lokale Wirtschaft stärkt. Mit deiner Unterstützung können wir die Küche ausrüsten, das Team aufbauen und die ersten Monate sichern. Jeder Beitrag hilft uns, die Vision eines fairen, regionalen Burger-Restaurants in der Innenstadt zu verwirklichen.",
           "images": [
-            "https://picsum.photos/seed/burger-news-1a/800/450",
-            "https://picsum.photos/seed/burger-news-1b/800/450",
-            "https://picsum.photos/seed/burger-news-1c/800/450"
+            "uploads/burger-restaurant/news-1.jpg",
+            "uploads/burger-restaurant/news-2.jpg",
+            "uploads/burger-restaurant/news-3.jpg"
           ]
         },
         {
@@ -36,7 +36,7 @@
           "title": "So werden die Mittel eingesetzt",
           "body": "Die Mittel werden direkt in die Ausstattung der Küche, die Auswahl lokaler Lieferanten und die Eröffnungsphase investiert. Wir halten dich über jeden Schritt auf dem Laufenden – von der Planung bis zur ersten Öffnung.",
           "images": [
-            "https://picsum.photos/seed/burger-news-2/800/450"
+            "uploads/burger-restaurant/news-4.jpg"
           ]
         }
       ]
@@ -51,7 +51,7 @@
         "Auf großen Festivals bricht das Mobilfunknetz regelmäßig zusammen. Wir bauen ein dezentrales Mesh-Netzwerk aus günstigen Funkknoten, das auch bei zehntausenden Besuchern stabil bleibt.",
         "Die Knoten sind solarbetrieben, wetterfest und in wenigen Minuten aufgebaut. Mit deiner Unterstützung finanzieren wir Hardware, Software und einen ersten Feldtest auf einem Partnerfestival."
       ],
-      "image": "https://picsum.photos/seed/mesh-netzwerk/800/480",
+      "image": "uploads/mesh-netzwerk-festivals/cover.jpg",
       "category": "Open Source",
       "milestones": [
         { "index": "01", "title": "Hardware-Beschaffung", "description": "Einkauf der Funkmodule, Solarpanels und wetterfesten Gehäuse für die erste Knotenserie." },
@@ -64,8 +64,8 @@
           "title": "Erste Knoten sind da",
           "body": "Die erste Charge der Funkmodule ist eingetroffen und die Lötarbeiten haben begonnen. Als Nächstes steht der Aufbau des Routing-Stacks an.",
           "images": [
-            "https://picsum.photos/seed/mesh-news-1a/800/450",
-            "https://picsum.photos/seed/mesh-news-1b/800/450"
+            "uploads/mesh-netzwerk-festivals/news-1.jpg",
+            "uploads/mesh-netzwerk-festivals/news-2.jpg"
           ]
         }
       ]
@@ -80,7 +80,7 @@
         "„Aetherbound“ ist ein handgezeichnetes Action-Roguelike, das wir mit einem kleinen, unabhängigen Team entwickeln. Jeder Durchlauf ist anders, jede Entscheidung zählt.",
         "Mit der Finanzierung sichern wir die Fertigstellung von Art, Sound und Early-Access-Version – komplett unabhängig von großen Publishern."
       ],
-      "image": "https://picsum.photos/seed/aetherbound/800/480",
+      "image": "uploads/roguelike-aetherbound/cover.jpg",
       "category": "Games",
       "milestones": [
         { "index": "01", "title": "Spielbarer Prototyp", "description": "Fertigstellung des Kern-Gameplay-Loops und eines spielbaren vertikalen Slices." },
@@ -93,7 +93,7 @@
           "title": "Ziel erreicht – danke!",
           "body": "Die Kampagne ist erfolgreich abgeschlossen. Alle Meilensteine wurden von den Validatoren bestätigt und die Mittel vollständig freigegeben.",
           "images": [
-            "https://picsum.photos/seed/aetherbound-news-1/800/450"
+            "uploads/roguelike-aetherbound/news-1.jpg"
           ]
         }
       ]
@@ -108,7 +108,7 @@
         "Mit einem umgebauten Foodtruck bringen wir warme, frisch gekochte Mahlzeiten direkt zu Menschen in Not – an wechselnden Standorten in ganz Berlin.",
         "Die Spenden finanzieren den Kauf des Fahrzeugs, den Küchenumbau und die Erstausstattung mit Zutaten für die ersten Monate."
       ],
-      "image": "https://picsum.photos/seed/suppenkueche/800/480",
+      "image": "uploads/mobile-suppenkueche-berlin/cover.jpg",
       "category": "Soziales",
       "milestones": [
         { "index": "01", "title": "Foodtruck-Kauf", "description": "Anschaffung eines gebrauchten, TÜV-geprüften Transporters als Basis für die mobile Küche." },
@@ -134,7 +134,7 @@
         "Die Stürme und Borkenkäfer der letzten Jahre haben in der Eifel große Kahlflächen hinterlassen. Wir pflanzen 10.000 standortgerechte, heimische Bäume und schaffen einen klimastabilen Mischwald.",
         "Die Mittel decken Flächensicherung, Setzlinge und die organisierten Pflanzaktionen mit Freiwilligen aus der Region."
       ],
-      "image": "https://picsum.photos/seed/eifel-wald/800/480",
+      "image": "uploads/wiederaufforstung-eifel/cover.jpg",
       "category": "Umwelt",
       "milestones": [
         { "index": "01", "title": "Flächensicherung", "description": "Pacht und rechtliche Sicherung der Aufforstungsflächen in Abstimmung mit dem Forstamt." },
@@ -147,8 +147,8 @@
           "title": "Flächen gesichert",
           "body": "Die ersten Aufforstungsflächen sind gepachtet und freigegeben. Jetzt sammeln wir für die Setzlinge.",
           "images": [
-            "https://picsum.photos/seed/eifel-news-1a/800/450",
-            "https://picsum.photos/seed/eifel-news-1b/800/450"
+            "uploads/wiederaufforstung-eifel/news-1.jpg",
+            "uploads/wiederaufforstung-eifel/news-2.jpg"
           ]
         }
       ]

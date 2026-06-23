@@ -84,6 +84,21 @@ function removeNews(i: number) {
   form.news.splice(i, 1)
 }
 
+// Images are uploads only (no external URLs). Prototype: the file isn't actually
+// uploaded — we record the chosen filename as the placeholder key; the real
+// upload→key flow lands in updateProjectMetadata().
+function onCoverFile(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (file) form.image = file.name
+  input.value = ''
+}
+function onNewsFiles(e: Event, entry: { images: string[] }) {
+  const input = e.target as HTMLInputElement
+  if (input.files) entry.images.push(...Array.from(input.files).map((f) => f.name))
+  input.value = ''
+}
+
 async function save() {
   if (saving.value) return
   saving.value = true
@@ -175,8 +190,13 @@ onMounted(load)
             <input v-model="form.category" class="field__input" type="text" />
           </label>
           <label class="field">
-            <span class="field__label">Bild-URL</span>
-            <input v-model="form.image" class="field__input" type="url" />
+            <span class="field__label">Titelbild</span>
+            <input class="field__file" type="file" accept="image/*" @change="onCoverFile" />
+            <span v-if="form.image" class="field__chosen">
+              {{ form.image }}
+              <button type="button" class="field__chosen-x" aria-label="Entfernen" @click="form.image = ''">✕</button>
+            </span>
+            <span class="field__hint">Nur eigener Upload · im Prototyp Platzhalter (Datei wird nicht gespeichert).</span>
           </label>
         </div>
       </section>
@@ -258,11 +278,14 @@ onMounted(load)
           </label>
           <div class="subfield">
             <div class="subfield__head">
-              <span class="field__label">Bilder (URLs)</span>
-              <button type="button" class="btn btn--small" @click="n.images.push('')">+ Bild</button>
+              <span class="field__label">Bilder</span>
+              <label class="btn btn--small">
+                + Bilder
+                <input type="file" accept="image/*" multiple hidden @change="onNewsFiles($event, n)" />
+              </label>
             </div>
-            <div v-for="(_, j) in n.images" :key="j" class="field--removable">
-              <input v-model="n.images[j]" class="field__input" type="url" placeholder="https://…" />
+            <div v-for="(img, j) in n.images" :key="j" class="chosen-row">
+              <span class="chosen-row__name">{{ img }}</span>
               <button type="button" class="btn btn--icon" aria-label="Bild entfernen" @click="n.images.splice(j, 1)">✕</button>
             </div>
           </div>
@@ -573,12 +596,56 @@ onMounted(load)
 
 /* Buttons */
 .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   border-radius: var(--bd-radius-sm);
   font-family: inherit;
   font-weight: 700;
   font-size: 14px;
   padding: 10px 16px;
+  cursor: pointer;
+}
+
+.field__file {
+  font-size: 13px;
+}
+
+.field__chosen {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--bd-black);
+  word-break: break-all;
+}
+
+.field__chosen-x {
+  border: none;
+  background: transparent;
+  color: var(--bd-grey-text);
+  cursor: pointer;
+}
+
+.field__hint {
+  font-size: 12px;
+  color: var(--bd-grey-text);
+}
+
+.chosen-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--bd-stroke);
+  border-radius: var(--bd-radius-sm);
+  font-size: 13px;
+}
+
+.chosen-row__name {
+  word-break: break-all;
 }
 
 .btn--primary {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { mediaUrl } from '@/utils/media'
 import AppIcon from '@/components/ui/AppIcon.vue'
 
 // Image viewer for a list of URLs: nothing for an empty list, a single static
@@ -26,7 +27,7 @@ function go(delta: number) {
 <template>
   <div v-if="images.length" class="slider">
     <div class="slider__frame">
-      <img :src="images[current]" :alt="alt ?? ''" class="slider__img" loading="lazy" />
+      <img :src="mediaUrl(images[current] ?? '')" :alt="alt ?? ''" class="slider__img" loading="lazy" />
 
       <template v-if="hasMultiple">
         <button

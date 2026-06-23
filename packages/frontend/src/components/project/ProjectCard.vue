@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { Project } from '@/types/project'
 import { formatAmount, percentFunded } from '@/utils/format'
+import { mediaUrl } from '@/utils/media'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import ProgressBar from '@/components/ui/ProgressBar.vue'
 
@@ -37,7 +38,7 @@ const milestoneMarkers = computed(() => {
 <template>
   <RouterLink class="card" :to="{ name: 'project-detail', params: { id: project.id } }">
     <div class="card__image">
-      <img :src="project.image" :alt="project.title" loading="lazy" />
+      <img :src="mediaUrl(project.image)" :alt="project.title" loading="lazy" />
     </div>
     <div class="card__body">
       <h3 class="card__title">{{ project.title }}</h3>

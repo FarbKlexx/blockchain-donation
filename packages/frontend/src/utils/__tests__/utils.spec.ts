@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { percentFunded, formatAmount, daysLeftUntil, hasEnded, timeLeftShort } from '../format'
 import { validateAmount, decimalsFor, NATIVE_CURRENCY } from '../amount'
 import { shortenAddress, explorerAddressUrl } from '../address'
+import { mediaUrl } from '../media'
 
 describe('percentFunded', () => {
   it('rounds and clamps to 0–100', () => {
@@ -67,6 +68,32 @@ describe('time-left derivations', () => {
     expect(timeLeftShort(past, now)).toBe('Beendet')
     expect(hasEnded(past, now)).toBe(true)
     expect(hasEnded(end, now)).toBe(false)
+  })
+})
+
+describe('mediaUrl', () => {
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('turns a relative key into a root-relative URL (default base)', () => {
+    expect(mediaUrl('uploads/p/cover.jpg')).toBe('/uploads/p/cover.jpg')
+  })
+
+  it('collapses a leading slash on the key (no double slash)', () => {
+    expect(mediaUrl('/uploads/p/cover.jpg')).toBe('/uploads/p/cover.jpg')
+  })
+
+  it('prepends a configured media base, without doubling slashes', () => {
+    vi.stubEnv('VITE_MEDIA_BASE_URL', 'https://cdn.example.com/')
+    expect(mediaUrl('uploads/p/cover.jpg')).toBe('https://cdn.example.com/uploads/p/cover.jpg')
+  })
+
+  it('leaves an already-absolute URL untouched', () => {
+    expect(mediaUrl('https://x.com/a.jpg')).toBe('https://x.com/a.jpg')
+    expect(mediaUrl('//x.com/a.jpg')).toBe('//x.com/a.jpg')
+  })
+
+  it('returns empty string for an empty ref', () => {
+    expect(mediaUrl('')).toBe('')
   })
 })
 

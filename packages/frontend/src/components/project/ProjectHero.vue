@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import type { Funding, Project } from '@/types/project'
 import { donate } from '@/services/projectsService'
 import { decimalsFor, validateAmount } from '@/utils/amount'
+import { mediaUrl } from '@/utils/media'
 import { useWalletStore } from '@/stores/wallet'
 import AppIcon from '@/components/ui/AppIcon.vue'
 
@@ -53,7 +54,7 @@ async function onDonate() {
 <template>
   <section class="hero">
     <div class="hero__image">
-      <img :src="project.image" :alt="project.title" />
+      <img :src="mediaUrl(project.image)" :alt="project.title" />
     </div>
     <div class="hero__content">
       <span v-if="project.verified" class="hero__badge hero__badge--verified">
