@@ -14,7 +14,7 @@ contract Donation{
 
     uint256 public refundableBalance;
 
-    //solidity has no decimal numbers, so we use these variables to calculate percentages
+    //solidity has no decimal numbers, so we usebasepoints to represent percentages
     uint256 constant basepoints = 10000;
 
     address[] public donors;
@@ -23,9 +23,8 @@ contract Donation{
     address[] public validators;
     mapping(address => bool) public isValidator;
 
-    uint256 public milestoneCount;
     uint256 public currentMilestone;
-    mapping(uint256 => Milestone) public milestones;
+    Milestone[] public milestones;
     mapping(uint256 => mapping(address => bool)) public votesForMilestone;
     mapping(uint256 => mapping(address => bool)) hasVoted;
 
@@ -98,8 +97,7 @@ contract Donation{
         for(uint i = 0; i < milestonePercentages.length; i++){
             require(milestonePercentages[i] > 0, "Milestone percentage must be positive");
             totalPercentage += milestonePercentages[i];
-            milestones[i] = Milestone(milestonePercentages[i], false, 0, 0, false);
-            milestoneCount++;
+            milestones.push(Milestone(milestonePercentages[i], false, 0, 0, false));
         }
         require(totalPercentage == basepoints, "Milestones percent have to add up to 10000");
 
@@ -187,7 +185,7 @@ contract Donation{
         milestones[milestoneIndex].paid = true;
         totalPayout += milestonePayout;
         
-        if (currentMilestone < milestoneCount - 1){
+        if (currentMilestone < milestones.length){
             currentMilestone++;
         }else{
             Status oldStatus = currentStatus;
@@ -265,7 +263,7 @@ contract Donation{
     }
 
     modifier isMilestone(uint256 x){
-        require(x < milestoneCount, "Milestone does not exist");
+        require(x < milestones.length, "Milestone does not exist");
         _;
     }
 
@@ -341,13 +339,7 @@ contract Donation{
     }
 
     function getMilestones() external view returns (Milestone[] memory){
-        Milestone[] memory milestoneArray = new Milestone[](milestoneCount);
-
-        for(uint256 i=0; i < milestoneCount; i++){
-            milestoneArray[i] = milestones[i];
-        }
-
-        return milestoneArray;
+        return milestones;
     }
 
 
