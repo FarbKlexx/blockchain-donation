@@ -51,7 +51,7 @@ export interface ContractInfo {
   address: string
   /** Explorer page URL — derived by the frontend from `address`, not stored. */
   explorerUrl: string
-  /** Label for the explorer link, e.g. "View on Polygonscan". */
+  /** Label for the explorer link, e.g. "View on Etherscan". */
   explorerLabel: string
 }
 

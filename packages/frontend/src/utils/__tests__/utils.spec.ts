@@ -105,7 +105,7 @@ describe('address helpers', () => {
   })
 
   it('derives the explorer URL from the address (fixed https scheme)', () => {
-    expect(explorerAddressUrl(full)).toBe(`https://polygonscan.com/address/${full}`)
+    expect(explorerAddressUrl(full)).toBe(`https://etherscan.io/address/${full}`)
     expect(explorerAddressUrl(full).startsWith('https://')).toBe(true)
   })
 })

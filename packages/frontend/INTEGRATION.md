@@ -27,7 +27,7 @@ View/Komponente ─> projectsService.ts ─┤
 Der Join in `mergeProject()`: Projekt über die **On-Chain-Adresse** (`address` — die eindeutige Projekt-ID, in der DB ebenfalls gespeichert), Meilensteine über die **Array-Position**. Validatoren kommen **ausschließlich vom Contract** (kein Join). Der **Contract** ist autoritativ dafür, *welche* Einträge existieren; das Backend liefert nur die Anzeige-Texte.
 
 > **Bewusst NICHT im Backend (Sicherheit / Anonymität):**
-> - **Explorer-URL** wird im Frontend aus der On-Chain-Adresse gebaut ([`utils/address.ts`](src/utils/address.ts), `https://polygonscan.com/address/<addr>`) — kein backend-kontrollierter `href` (Injection-Vektor), die Adresse bleibt die einzige Quelle. Anzeige-Kürzung (`0x7f4...89a2`) ebenfalls im Frontend.
+> - **Explorer-URL** wird im Frontend aus der On-Chain-Adresse gebaut ([`utils/address.ts`](src/utils/address.ts), `https://etherscan.io/address/<addr>`) — kein backend-kontrollierter `href` (Injection-Vektor), die Adresse bleibt die einzige Quelle. Anzeige-Kürzung (`0x7f4...89a2`) ebenfalls im Frontend.
 > - **Validatoren** sind anonyme Adressen (Wallet-Login, kein User-System, kein Aktivitäts-Tracking) — **keine** Namen, Foto-Avatare oder Uptime/„Aktiv"-Status. Das Set (nur Adressen) kommt vom Contract; Avatar = deterministischer Identicon aus der Adresse, Label = gekürzte Adresse (beides Frontend, aus der Adresse abgeleitet).
 
 Beim Verdrahten ändern sich **nur die `fetch*`-Funktionen im Service** (und ggf.

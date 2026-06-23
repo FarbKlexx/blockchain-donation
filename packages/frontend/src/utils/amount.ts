@@ -8,8 +8,8 @@
 // Donations are the chain's NATIVE coin (the contract's `donate()` takes
 // `msg.value` — there is no ERC-20 token), so there is a single currency for
 // every campaign. Keyed to the deployment chain alongside the explorer config
-// in utils/address.ts (Polygon → POL/18). Change both together per chain.
-export const NATIVE_CURRENCY = 'POL'
+// in utils/address.ts (Ethereum → ETH/18). Change both together per chain.
+export const NATIVE_CURRENCY = 'ETH'
 export const NATIVE_DECIMALS = 18
 export const DEFAULT_DECIMALS = NATIVE_DECIMALS
 
