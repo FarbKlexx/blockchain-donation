@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { Funding, Project } from '@/types/project'
-import { getProject } from '@/services/projectsService'
+import { getProject, voteOnMilestone } from '@/services/projectsService'
 import { useWalletStore } from '@/stores/wallet'
 import { formatDate } from '@/utils/format'
 import ProjectHero from '@/components/project/ProjectHero.vue'
@@ -32,6 +32,34 @@ const wallet = useWalletStore()
 const isOwner = computed(
   () => !!project.value && wallet.roleInProject(project.value.contract.address).isOwner,
 )
+// Validator of THIS project → may vote on its current milestone.
+const isValidator = computed(
+  () => !!project.value && wallet.roleInProject(project.value.contract.address).isValidator,
+)
+
+// This account's votes cast THIS session, keyed by milestone position. Local UI
+// reflection only — the contract write is a placeholder (voteOnMilestone), so
+// nothing is persisted. Once wired, this comes from chain (hasVoted/votes).
+const myVotes = ref<Record<number, 'approve' | 'reject'>>({})
+const voteErrors = ref<Record<number, string>>({})
+const votingIndex = ref<number | null>(null)
+
+async function onVote(index: number, approve: boolean) {
+  if (!project.value || votingIndex.value !== null) return
+  votingIndex.value = index
+  delete voteErrors.value[index]
+  try {
+    await voteOnMilestone(project.value.contract.address, index, approve)
+    myVotes.value[index] = approve ? 'approve' : 'reject'
+  } catch (e) {
+    // Surface failures (today: the local-signer guard; once wired: a revert)
+    // instead of swallowing them — mirrors the donate flow in ProjectHero.
+    voteErrors.value[index] =
+      e instanceof Error ? e.message : 'Abstimmung fehlgeschlagen. Bitte erneut versuchen.'
+  } finally {
+    votingIndex.value = null
+  }
+}
 
 // Lifecycle gate (Spende → Stimme → Auszahlung): validators may only vote on
 // milestones once the funding goal is reached. The milestone UI keys off this,
@@ -56,6 +84,8 @@ function updateIndicator() {
 async function load() {
   loading.value = true
   activeTab.value = 'beschreibung'
+  myVotes.value = {}
+  voteErrors.value = {}
   try {
     project.value = await getProject(props.id)
   } finally {
@@ -153,12 +183,17 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
             </p>
             <div class="milestones__list">
               <MilestoneCard
-                v-for="m in project.milestones"
+                v-for="(m, i) in project.milestones"
                 :key="m.index"
                 :milestone="m"
                 :validators="project.validators"
                 :currency="project.currency"
                 :voting-open="goalReached"
+                :can-vote="isValidator && m.status === 'in_progress' && !myVotes[i]"
+                :my-vote="myVotes[i] ?? null"
+                :voting="votingIndex === i"
+                :vote-error="voteErrors[i] ?? null"
+                @vote="onVote(i, $event)"
               />
             </div>
           </div>

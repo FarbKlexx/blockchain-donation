@@ -13,7 +13,21 @@ const props = defineProps<{
    *  milestones AFTER the goal is met — until then this card stays locked,
    *  so it can never display confirmations that the concept forbids. */
   votingOpen: boolean
+  /** The connected account may vote on THIS milestone (is a validator here, the
+   *  milestone is the current open one, and they haven't voted yet). UI gate
+   *  only — the contract re-checks every precondition. */
+  canVote?: boolean
+  /** This account's already-cast vote on this milestone, if any (session-local
+   *  in the prototype; from chain once wired). */
+  myVote?: 'approve' | 'reject' | null
+  /** A vote tx for this milestone is in flight. */
+  voting?: boolean
+  /** Error from the last vote attempt on this milestone (e.g. the local-signer
+   *  guard, or a revert once wired) — shown inline. */
+  voteError?: string | null
 }>()
+
+const emit = defineEmits<{ vote: [approve: boolean] }>()
 
 const statusMeta: Record<MilestoneStatus, { label: string; variant: string }> = {
   completed: { label: 'Abgeschlossen', variant: 'green' },
@@ -74,6 +88,42 @@ const avatars = computed(() =>
         <AppIcon name="lock" :size="14" />
         <span>Abstimmung startet nach Zielerreichung</span>
       </div>
+    </div>
+
+    <!-- Validator voting on the current milestone. The buttons mirror the
+         contract's voteMilestone gate; the action itself is a placeholder (no
+         tx is sent yet — see services/projectsService.voteOnMilestone). -->
+    <div v-if="canVote || myVote" class="ms__vote">
+      <template v-if="myVote">
+        <span class="ms__voted" :class="`ms__voted--${myVote === 'approve' ? 'yes' : 'no'}`">
+          <AppIcon v-if="myVote === 'approve'" name="check" :size="13" />
+          {{ myVote === 'approve' ? 'Du hast zugestimmt' : 'Du hast abgelehnt' }}
+        </span>
+        <span class="ms__vote-note">Platzhalter – noch nicht an den Vertrag gesendet.</span>
+      </template>
+      <template v-else>
+        <span class="ms__vote-label">Als Validator abstimmen</span>
+        <div class="ms__vote-actions">
+          <button
+            type="button"
+            class="ms__vote-btn ms__vote-btn--yes"
+            :disabled="voting"
+            @click="emit('vote', true)"
+          >
+            <AppIcon name="check" :size="14" />
+            Zustimmen
+          </button>
+          <button
+            type="button"
+            class="ms__vote-btn ms__vote-btn--no"
+            :disabled="voting"
+            @click="emit('vote', false)"
+          >
+            Ablehnen
+          </button>
+        </div>
+        <span v-if="voteError" class="ms__vote-error" role="alert">{{ voteError }}</span>
+      </template>
     </div>
   </article>
 </template>
@@ -248,5 +298,86 @@ const avatars = computed(() =>
   gap: 6px;
   font-size: 12px;
   color: var(--bd-grey-text);
+}
+
+/* Validator voting */
+.ms__vote {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--bd-divider);
+}
+
+.ms__vote-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--bd-black);
+}
+
+.ms__vote-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.ms__vote-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--bd-radius-sm);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.ms__vote-btn:disabled {
+  opacity: 0.6;
+}
+
+.ms__vote-btn--yes {
+  color: #fff;
+  background: var(--bd-green);
+}
+
+.ms__vote-btn--no {
+  color: var(--bd-grey-text);
+  background: var(--bd-surface);
+  border-color: var(--bd-stroke);
+}
+
+.ms__vote-btn--no:hover:not(:disabled) {
+  border-color: var(--bd-black);
+  color: var(--bd-black);
+}
+
+.ms__voted {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ms__voted--yes {
+  color: var(--bd-green);
+}
+
+.ms__voted--no {
+  color: var(--bd-grey-text);
+}
+
+.ms__vote-note {
+  font-size: 12px;
+  color: var(--bd-grey-text);
+}
+
+.ms__vote-error {
+  flex-basis: 100%;
+  font-size: 13px;
+  color: #dc2626;
 }
 </style>

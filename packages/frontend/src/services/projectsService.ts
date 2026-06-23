@@ -366,6 +366,43 @@ export async function donate(projectId: string, amount: string): Promise<Donatio
   return delay({ txHash: '0xMOCK_TX_HASH', funding: toFunding(campaign) })
 }
 
+export interface VoteResult {
+  /** Transaction hash once the vote is mined. */
+  txHash: string
+}
+
+/**
+ * Cast a validator's vote on a project's CURRENT milestone (approve = true,
+ * reject = false). Validator-only, and only while that milestone is open for
+ * voting — the contract enforces all preconditions (isValidator, Payout phase,
+ * readyToBeApproved, current milestone, not-yet-voted); the UI mirrors them.
+ *
+ * TODO(integration): the real write —
+ *   const donation = Donation__factory.connect(projectAddress, signer)
+ *   await (await donation.voteMilestone(milestoneIndex, approve)).wait()
+ * then RE-READ that milestone (approvedCount/rejectedCount/paid) and the
+ * project's currentStatus from chain — a single approval can flip the project to
+ * Failed or advance the milestone. The contract is the authority; the frontend
+ * validator check is UX only.
+ *
+ * [mock] Placeholder: no transaction is sent and no state is mutated.
+ */
+export async function voteOnMilestone(
+  projectAddress: string,
+  milestoneIndex: number,
+  approve: boolean,
+): Promise<VoteResult> {
+  assertLocalSigner()
+  if (import.meta.env.DEV) {
+    console.info('[projectsService] voteOnMilestone — mock no-op (no tx sent):', {
+      projectAddress,
+      milestoneIndex,
+      approve,
+    })
+  }
+  return delay({ txHash: '0xMOCK_VOTE_TX_HASH' })
+}
+
 /** The editable, OFF-CHAIN slice of a project — exactly the metadata an owner
  *  may change. Mirrors the backend `ProjectMetadata` payload (minus the join
  *  keys). Nothing contract-owned (goal/donations/validators/milestone funds,
