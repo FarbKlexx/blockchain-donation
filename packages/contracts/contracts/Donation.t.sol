@@ -118,6 +118,9 @@ contract DonationTest is Test {
     bool vote = true;
     address validator = validators[0];
 
+    vm.prank(owner);
+    donation.payout(milestoneIndex);
+
     vm.expectEmit(true, false, false, true);
     emit Donation.VoteSubmitted(validator, milestoneIndex, vote);
 
@@ -147,9 +150,13 @@ contract DonationTest is Test {
 
   function test_VoteByValidatorMakesProjectFailed() public {
     donation.donate{value: donationGoal}();
+
     uint256 milestoneIndex = donation.currentMilestone();
     bool vote = false;
     address validator = validators[0];
+
+    vm.prank(owner);
+    donation.payout(milestoneIndex);
 
     vm.expectEmit(true, false, false, true);
     emit Donation.VoteSubmitted(validator, milestoneIndex, vote);
