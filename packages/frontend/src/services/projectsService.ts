@@ -65,6 +65,58 @@ async function fetchMetadataById(id: string): Promise<ProjectMetadata | null> {
   return delay(metadata.find((m) => m.id === id) ?? null)
 }
 
+// ── Account roles (one-time scan at login) ───────────────────────────────────
+// Roles are PRESENTATION state only — the contract is the sole authority (it
+// checks isValidator[msg.sender] / donations[msg.sender] / contractOwner on
+// every write). So these are untrusted hints, always re-derived from chain,
+// never persisted as a permission grant.
+
+export type Role = 'donor' | 'validator' | 'owner'
+
+/** What an address is across all campaigns — derived once at login from the
+ *  same on-chain data the grid uses. `donorOf`/`validatorOf`/`ownerOf` hold the
+ *  campaign addresses (the memberships that power "Meine Projekte" and, later,
+ *  per-project capabilities); the booleans are just `…Of.length > 0`. */
+export interface AccountSession {
+  address: string
+  donorOf: string[]
+  validatorOf: string[]
+  ownerOf: string[]
+  roles: Record<Role, boolean>
+}
+
+/**
+ * Scan every campaign once and resolve the caller's memberships/roles.
+ *
+ * TODO(integration): replace the array scans with per-campaign contract reads —
+ * `donations(addr) > 0`, `isValidator(addr)`, `contractOwner() === addr` —
+ * ideally batched in a single multicall. The returned shape stays identical, so
+ * the store and UI are untouched.
+ */
+export async function loadAccountSession(address: string): Promise<AccountSession> {
+  const a = address.toLowerCase()
+  const campaignList = await fetchCampaigns()
+  const includesAddr = (list: string[]) => list.some((x) => x.toLowerCase() === a)
+
+  const donorOf = campaignList.filter((c) => includesAddr(c.donors)).map((c) => c.address)
+  const validatorOf = campaignList.filter((c) => includesAddr(c.validators)).map((c) => c.address)
+  const ownerOf = campaignList
+    .filter((c) => c.contractOwner.toLowerCase() === a)
+    .map((c) => c.address)
+
+  return {
+    address,
+    donorOf,
+    validatorOf,
+    ownerOf,
+    roles: {
+      donor: donorOf.length > 0,
+      validator: validatorOf.length > 0,
+      owner: ownerOf.length > 0,
+    },
+  }
+}
+
 // ── Derivations: raw on-chain fields → the UI model ──────────────────────────
 // The contract stores only primitives; everything the UI shows that looks
 // "computed" (days left, milestone amounts, milestone/project status, the
