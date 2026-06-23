@@ -17,6 +17,7 @@ contract Donation{
     //solidity has no decimal numbers, so we use these variables to calculate percentages
     uint256 constant basepoints = 10000;
 
+    address[] public donors;
     mapping(address => uint256) public donations;
     address[] public validators;
     mapping(address => bool) public isValidator;
@@ -77,7 +78,7 @@ contract Donation{
     );
 
     event RefundMade(
-        address donator,
+        address donor,
         uint256 refundAmount
     );
 
@@ -130,11 +131,17 @@ contract Donation{
 
     function donate() external payable isPositiveDonation(msg.value) onlyDuringFunding() isInTimeFrame() noOverpaying(msg.value) {
         uint256 donation = msg.value;
+        address donor = msg.sender;
 
+        if(donations[donor] == 0){
+            donors.push(donor);
+        }
         totalDonations += donation;
-        donations[msg.sender] += donation;
+        donations[donor] += donation;
 
-        emit DonationReceived(msg.sender, msg.value);
+
+
+        emit DonationReceived(donor, donation);
 
         if(totalDonations >= donationGoal){
             Status oldStatus = currentStatus;
@@ -199,7 +206,7 @@ contract Donation{
         require(success, "Rest Payout failed");
     }
 
-    function refund() external onlyWhenFailed isDonator {
+    function refund() external onlyWhenFailed isDonor {
         uint256 refundAmount = (donations[msg.sender] * refundableBalance) / totalDonations;
         donations[msg.sender] = 0;
 
@@ -304,7 +311,7 @@ contract Donation{
         _;
     }
     
-    modifier isDonator() {
+    modifier isDonor() {
         require(donations[msg.sender] > 0, "Sender has not donated anything");
         _;
     }
@@ -318,8 +325,6 @@ contract Donation{
     function getValidator(uint256 x) external view returns (address){
         return validators[x];
     }
-
-
 
     //no decimal numbers so we need basepoints
     //basepoints is 100%
