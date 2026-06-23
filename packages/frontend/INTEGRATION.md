@@ -21,10 +21,10 @@ View/Komponente ─> projectsService.ts ─┤
                                                   SOURCE 2 → fetch('/api/...')
 ```
 
-- **SOURCE 1 — Contract** ([`src/data/contractData.json`](src/data/contractData.json), Typen in [`types/sources.ts`](src/types/sources.ts) → `ContractCampaign`): on-chain State — `raised`, `goal`, `donors`, `daysLeft`, `verified`, `status`, `currency`, Contract-Adresse, Meilenstein-**State** (`allocated`/`status`/`confirmations`), Validator-**Set** (`address`).
-- **SOURCE 2 — Backend** ([`src/data/projectMetadata.json`](src/data/projectMetadata.json) → `ProjectMetadata`): off-chain Inhalte — `title`, `summary`, `description`, `image`, `category`, `news`, sowie Meilenstein-`title`/`description`.
+- **SOURCE 1 — Contract** ([`src/data/contractData.json`](src/data/contractData.json), Typen in [`types/sources.ts`](src/types/sources.ts) → `ContractCampaign`): spiegelt die echten `Donation`/`DonationFactory`-Contracts (Branch `contractDonation`). On-chain State — `address` (Identität), `owner`, `goal`, `raised`, `donors`, `start`/`end` (Unix-Timestamps), `status` (Enum `Funding|Payout|Failed|Closed`), `currentMilestone`, `neededVoteMajorityInBps`, Validator-Adressen, Meilenstein-**Struct** (`percentage` in Basispunkten, `readyToBeApproved`, `approvedCount`, `rejectedCount`, `paid`). Beträge sind die **native Coin** (Spende = `msg.value`, kein ERC-20). **Abgeleitet** im Frontend (NICHT on-chain): „Tage übrig"/„Restzeit" aus `end`, Meilenstein-Betrag aus `percentage`·`goal`, Meilenstein-**Status** aus `paid`/`readyToBeApproved`/`currentMilestone`, laufend/abgelaufen aus `status`+`end`, „Freigabe nötig" aus `neededVoteMajorityInBps`.
+- **SOURCE 2 — Backend** ([`src/data/projectMetadata.json`](src/data/projectMetadata.json) → `ProjectMetadata`): off-chain Inhalte — `address` (Join-Key/DB-Primärschlüssel), `id` (Slug für Routen), `verified` (Backend-Aussage, **nicht** on-chain), `title`, `summary`, `description`, `image`, `category`, `news`, sowie Meilenstein-`title`/`description`.
 
-Der Join in `mergeProject()`: Projekt über `id`, Meilensteine über `index`. Validatoren kommen **ausschließlich vom Contract** (kein Join). Der **Contract** ist autoritativ dafür, *welche* Einträge existieren; das Backend liefert nur die Anzeige-Texte.
+Der Join in `mergeProject()`: Projekt über die **On-Chain-Adresse** (`address` — die eindeutige Projekt-ID, in der DB ebenfalls gespeichert), Meilensteine über die **Array-Position**. Validatoren kommen **ausschließlich vom Contract** (kein Join). Der **Contract** ist autoritativ dafür, *welche* Einträge existieren; das Backend liefert nur die Anzeige-Texte.
 
 > **Bewusst NICHT im Backend (Sicherheit / Anonymität):**
 > - **Explorer-URL** wird im Frontend aus der On-Chain-Adresse gebaut ([`utils/address.ts`](src/utils/address.ts), `https://polygonscan.com/address/<addr>`) — kein backend-kontrollierter `href` (Injection-Vektor), die Adresse bleibt die einzige Quelle. Anzeige-Kürzung (`0x7f4...89a2`) ebenfalls im Frontend.
@@ -44,7 +44,7 @@ Komponenten und Views bleiben unangetastet. Die Service-Funktionen sind bereits
 
 | UI-Element | Komponente | Heute (Mock) | Später einzubauen |
 | --- | --- | --- | --- |
-| **„Jetzt unterstützen"** + Betrags-Input (Hero) | [`components/project/ProjectHero.vue`](src/components/project/ProjectHero.vue) | `donate(id, amount)` → Stub, sendet nichts | ERC-20-Spende USDC: `approve()` + `escrow.donate(amount)`, dann `tx.wait()` und Funding neu lesen |
+| **„Jetzt unterstützen"** + Betrags-Input (Hero) | [`components/project/ProjectHero.vue`](src/components/project/ProjectHero.vue) | `donate(id, amount)` → Stub, sendet nichts | Native Spende: `donation.donate({ value: parseEther(amount) })`, dann `tx.wait()` und Funding neu lesen — **kein** ERC-20-`approve()`-Schritt |
 | **„Einloggen mit Wallet"** (Navbar) | [`components/layout/AppNavbar.vue`](src/components/layout/AppNavbar.vue) | `connectWallet()` → Stub | Dev: Signer aus `VITE_DEV_PRIVATE_KEY`; echte Nutzer: `new BrowserProvider(window.ethereum)` + `getSigner()` |
 
 Beide rufen Funktionen in `projectsService.ts` auf — dort steht der genaue
@@ -57,15 +57,15 @@ ethers-v6-Skizzencode in den `TODO(integration)`-Kommentaren.
 | UI-Element | Komponente | Service-Aufruf | Datenquelle später |
 | --- | --- | --- | --- |
 | Projekt-Grid (Übersicht) | [`views/ProjectOverviewView.vue`](src/views/ProjectOverviewView.vue) · [`ProjectCard.vue`](src/components/project/ProjectCard.vue) | `listProjects({filter, sort})` | Campaign-Registry-Contract + Metadaten (Titel/Bild/Text) |
-| Filter **Laufend / Abgelaufen** | `ProjectOverviewView.vue` | Param `filter` | Aus `deadline()` / Kampagnen-Status ableiten (Filtern kann client-seitig bleiben) |
+| Filter **Laufend / Abgelaufen** | `ProjectOverviewView.vue` | Param `filter` | Aus `currentStatus` + `end` ableiten (Filtern kann client-seitig bleiben) |
 | **Sortieren nach** (Neuste/Fortschritt/Endet bald) | `ProjectOverviewView.vue` | Param `sort` | Client-seitig auf den gelesenen Daten — keine Chain-Logik nötig |
 | Ergebnis-Zähler („N Ergebnisse") | `ProjectOverviewView.vue` | abgeleitet aus Liste | automatisch |
 | Projekt-Detail (gesamt) | [`views/ProjectDetailView.vue`](src/views/ProjectDetailView.vue) | `getProject(id)` | Escrow-Contract des Projekts + Metadaten |
-| **Gesammelte Mittel** (Betrag, Ziel, % , Donoren, Tage übrig) | [`components/project/FundingCard.vue`](src/components/project/FundingCard.vue) | `project.funding` | `raised()`, `goal()`, `donorCount()`, `deadline()` |
+| **Gesammelte Mittel** (Betrag, Ziel, % , Donoren, Tage übrig) | [`components/project/FundingCard.vue`](src/components/project/FundingCard.vue) | `project.funding` | `totalDonations()`, `donationGoal()`, Donor-Liste (Länge), `end()` — **Tage übrig** wird aus `end` abgeleitet, nicht gelesen |
 | Fortschrittsbalken | [`components/ui/ProgressBar.vue`](src/components/ui/ProgressBar.vue) | abgeleitet (`percentFunded`) | aus `raised/goal` berechnet |
 | **Smart Contract Details** (Adresse + Explorer-Link) | [`components/project/SmartContractCard.vue`](src/components/project/SmartContractCard.vue) | volle Adresse aus Contract-Quelle; URL frontend-abgeleitet | echte Contract-Adresse (on-chain); Explorer-URL weiterhin im Frontend aus der Adresse gebaut |
 | **Validatoren** (Liste anonymer Adressen) | [`components/project/ValidatorsCard.vue`](src/components/project/ValidatorsCard.vue) | `project.validators` | On-chain Validator-Set (nur Adressen) |
-| **Meilensteine** (Status, zugeordnete Mittel, „X/3 bestätigt") | [`components/project/MilestoneCard.vue`](src/components/project/MilestoneCard.vue) | `project.milestones` + `goalReached` (`raised >= goal`) | Milestone-State + Validator-Bestätigungen; (Folgeschritt) Mittel-Freigabe-Tx |
+| **Meilensteine** (Status, zugeordnete Mittel, „X/N bestätigt · Y nötig") | [`components/project/MilestoneCard.vue`](src/components/project/MilestoneCard.vue) | `project.milestones` + `goalReached` (`raised >= goal`) | `milestones(i)`-Struct: Betrag aus `percentage`·`goal`, `approvedCount`/`rejectedCount`, Freigabe ab **66,66 %-Mehrheit** (`neededVoteMajorityInBps`) der Validatoren — nicht „alle N"; (Folgeschritt) Freigabe-Tx |
 | **Meilenstein-Abstimmung gesperrt/offen** | `ProjectDetailView.vue` → `votingOpen`-Prop | abgeleitet aus `funding` | Lifecycle-Invariante **Spende → Stimme → Auszahlung**: Validatoren stimmen erst ab, **nachdem das Ziel erreicht ist**. Bis dahin sind alle Meilensteine gesperrt (0 Bestätigungen). Der Contract erzwingt das on-chain; das Frontend spiegelt es. |
 | Tab **Beschreibung** / **Neuigkeiten** | `ProjectDetailView.vue` | `project.description` / `project.news` | Off-chain-Metadaten (kein Chain-Read) |
 

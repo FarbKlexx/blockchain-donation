@@ -66,7 +66,8 @@ const avatars = computed(() =>
           </span>
         </div>
         <span class="ms__confirm-text">
-          {{ milestone.confirmations }}/{{ milestone.totalValidators }} Validatoren bestätigt
+          {{ milestone.confirmations }}/{{ milestone.totalValidators }} bestätigt
+          · {{ milestone.requiredApprovals }} für Freigabe nötig
         </span>
       </div>
       <div v-else class="ms__locked">

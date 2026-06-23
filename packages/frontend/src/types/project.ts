@@ -25,10 +25,13 @@ export interface Milestone {
   /** Funds allocated to this milestone, in the project currency. */
   allocated: number
   status: MilestoneStatus
-  /** How many validators have confirmed this milestone so far. */
+  /** How many validators have approved this milestone so far (`approvedCount`). */
   confirmations: number
-  /** Total validators that must confirm before funds are released. */
+  /** Size of the validator set (denominator for the confirmation display). */
   totalValidators: number
+  /** Approvals needed to release funds — a 66.66% majority of the validator set,
+   *  derived from the contract's `neededVoteMajorityInBps` (NOT every validator). */
+  requiredApprovals: number
 }
 
 /** A project update entry shown under the "Neuigkeiten" tab. */
@@ -57,9 +60,9 @@ export interface Funding {
   goal: number
   /** Number of unique donors. */
   donors: number
-  /** Whole days remaining in the campaign. */
+  /** Whole days remaining — DERIVED from the contract's `end` timestamp. */
   daysLeft: number
-  /** Compact countdown label used on cards, e.g. "11d, 6 Std.". */
+  /** Compact countdown for cards, e.g. "11d, 6 Std." — DERIVED from `end`. */
   timeLeftShort: string
 }
 
@@ -75,9 +78,10 @@ export interface Project {
   image: string
   /** Category/label badge, e.g. "Fairer Handel & Bio". */
   category: string
-  /** Whether the smart contract has been verified. */
+  /** Whether the project is "verified" — a backend assertion (not on-chain). */
   verified: boolean
-  /** ISO 4217-ish currency code shown next to amounts, e.g. "USDC". */
+  /** Currency shown next to amounts. The chain's native coin (donations are
+   *  `msg.value`, no ERC-20 token), so it's the same for every campaign. */
   currency: string
   status: ProjectStatus
   funding: Funding
