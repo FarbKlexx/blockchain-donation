@@ -30,13 +30,7 @@ contract DonationFactoryTest is Test {
 
         vm.prank(owner);
 
-        address donationAddress = factory.createDonation(
-            10 ether,
-            validators,
-            "Save Gustavs restaurant",
-            30 days,
-            milestones
-        );
+        address donationAddress = factory.createDonation(10 ether, validators, "Description", 30 days, milestones);
 
         assertTrue(donationAddress != address(0));
     }
@@ -51,15 +45,9 @@ contract DonationFactoryTest is Test {
 
         vm.prank(owner);
 
-        address donationAddress = factory.createDonation(
-            1 ether,
-            validators,
-            "Test",
-            1 days,
-            milestones
-        );
+        address donationAddress = factory.createDonation(1 ether, validators, "Test", 1 days, milestones);
 
-        assertEq(factory.getDonationsCount(), 1);
+        assertEq(factory.getProjectCount(), 1);
         assertEq(factory.projects(0), donationAddress);
     }
 
@@ -73,13 +61,7 @@ contract DonationFactoryTest is Test {
 
         vm.prank(owner);
 
-        address donationAddress = factory.createDonation(
-            5 ether,
-            validators,
-            "Project",
-            7 days,
-            milestones
-        );
+        address donationAddress = factory.createDonation(5 ether, validators, "Project", 7 days, milestones);
 
         Donation donation = Donation(donationAddress);
 
@@ -96,24 +78,12 @@ contract DonationFactoryTest is Test {
 
         vm.startPrank(owner);
 
-        factory.createDonation(
-            1 ether,
-            validators,
-            "A",
-            1 days,
-            milestones
-        );
+        factory.createDonation(1 ether, validators, "A", 1 days, milestones);
 
-        factory.createDonation(
-            2 ether,
-            validators,
-            "B",
-            1 days,
-            milestones
-        );
+        factory.createDonation(2 ether, validators, "B", 1 days, milestones);
 
         vm.stopPrank();
 
-        assertEq(factory.getDonationsCount(), 2);
+        assertEq(factory.getProjectCount(), 2);
     }
 }
