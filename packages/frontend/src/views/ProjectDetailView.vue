@@ -12,6 +12,7 @@ import ValidatorsCard from '@/components/project/ValidatorsCard.vue'
 import MilestoneCard from '@/components/project/MilestoneCard.vue'
 import ProjectDetailSkeleton from '@/components/project/ProjectDetailSkeleton.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
+import ImageSlider from '@/components/ui/ImageSlider.vue'
 
 const props = defineProps<{ id: string }>()
 
@@ -203,6 +204,12 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
             <article v-for="(entry, i) in project.news" :key="i" class="news__entry">
               <p class="news__meta">{{ formatDate(entry.date) }}</p>
               <h3 class="news__title">{{ entry.title }}</h3>
+              <ImageSlider
+                v-if="entry.images.length"
+                :images="entry.images"
+                :alt="entry.title"
+                class="news__media"
+              />
               <p class="news__body">{{ entry.body }}</p>
             </article>
             <p v-if="project.news.length === 0" class="detail__state">

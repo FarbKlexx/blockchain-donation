@@ -414,7 +414,7 @@ export interface ProjectMetadataPatch {
   image: string
   description: string[]
   milestones: { index: string; title: string; description: string }[]
-  news: { date: string; title: string; body: string }[]
+  news: { date: string; title: string; body: string; images: string[] }[]
 }
 
 /**
@@ -470,7 +470,7 @@ export interface CreateProjectPayload {
     description: string[]
     /** Milestone display texts, in the same order as the percentages above. */
     milestones: { title: string; description: string }[]
-    news: { date: string; title: string; body: string }[]
+    news: { date: string; title: string; body: string; images: string[] }[]
   }
 }
 

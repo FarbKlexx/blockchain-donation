@@ -86,6 +86,8 @@ export interface MetadataNews {
   date: string
   title: string
   body: string
+  /** Image URLs for this entry. Multiple → rendered as a slider in the UI. */
+  images: string[]
 }
 
 /** Human-readable content for a project, served by the backend. */

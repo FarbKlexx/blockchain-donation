@@ -40,6 +40,9 @@ export interface NewsEntry {
   date: string
   title: string
   body: string
+  /** Image URLs for this entry (off-chain metadata). Zero → no media; one →
+   *  shown inline; multiple → a slider. */
+  images: string[]
 }
 
 /** Smart-contract info shown in the sidebar. */

@@ -23,7 +23,7 @@ const form = reactive({
   category: '',
   image: '',
   description: [''],
-  news: [] as { date: string; title: string; body: string }[],
+  news: [] as { date: string; title: string; body: string; images: string[] }[],
   // ── Smart contract ──
   goal: '',
   durationDays: '',
@@ -110,7 +110,7 @@ function removeMilestone(i: number) {
   form.milestones.splice(i, 1)
 }
 function addNews() {
-  form.news.push({ date: '', title: '', body: '' })
+  form.news.push({ date: '', title: '', body: '', images: [] })
 }
 function removeNews(i: number) {
   form.news.splice(i, 1)
@@ -143,7 +143,12 @@ async function submit() {
         })),
         news: form.news
           .filter((n) => n.title.trim() || n.body.trim())
-          .map((n) => ({ date: n.date, title: n.title.trim(), body: n.body.trim() })),
+          .map((n) => ({
+            date: n.date,
+            title: n.title.trim(),
+            body: n.body.trim(),
+            images: n.images.map((s) => s.trim()).filter(Boolean),
+          })),
       },
     }
     const result = await createProject(payload)
@@ -309,6 +314,16 @@ async function submit() {
             <span class="field__label">Text</span>
             <textarea v-model="n.body" class="field__input field__input--area" rows="3" />
           </label>
+          <div class="subfield">
+            <div class="subfield__head">
+              <span class="field__label">Bilder (URLs)</span>
+              <button type="button" class="btn btn--small" @click="n.images.push('')">+ Bild</button>
+            </div>
+            <div v-for="(_, j) in n.images" :key="j" class="field--removable">
+              <input v-model="n.images[j]" class="field__input" type="url" placeholder="https://…" />
+              <button type="button" class="btn btn--icon" aria-label="Bild entfernen" @click="n.images.splice(j, 1)">✕</button>
+            </div>
+          </div>
         </div>
         <p v-if="!form.news.length" class="card__empty">Noch keine Neuigkeiten – kann auch später ergänzt werden.</p>
       </section>
@@ -525,6 +540,19 @@ async function submit() {
   border: 1px solid var(--bd-stroke);
   border-radius: var(--bd-radius-md);
   background: var(--bd-surface);
+}
+
+.subfield {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.subfield__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 /* Buttons */

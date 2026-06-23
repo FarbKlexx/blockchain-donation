@@ -60,7 +60,12 @@ async function load() {
       title: m.title,
       description: m.description,
     }))
-    form.news = p.news.map((n) => ({ date: n.date, title: n.title, body: n.body }))
+    form.news = p.news.map((n) => ({
+      date: n.date,
+      title: n.title,
+      body: n.body,
+      images: [...n.images],
+    }))
   } finally {
     loading.value = false
   }
@@ -73,7 +78,7 @@ function removeParagraph(i: number) {
   form.description.splice(i, 1)
 }
 function addNews() {
-  form.news.unshift({ date: '', title: '', body: '' })
+  form.news.unshift({ date: '', title: '', body: '', images: [] })
 }
 function removeNews(i: number) {
   form.news.splice(i, 1)
@@ -92,7 +97,12 @@ async function save() {
       image: form.image,
       description: [...form.description],
       milestones: form.milestones.map((m) => ({ ...m })),
-      news: form.news.map((n) => ({ ...n })),
+      news: form.news.map((n) => ({
+        date: n.date,
+        title: n.title,
+        body: n.body,
+        images: n.images.map((s) => s.trim()).filter(Boolean),
+      })),
     }
     await updateProjectMetadata(props.id, patch)
     saved.value = true // prototype: nothing persisted (see service stub)
@@ -246,6 +256,16 @@ onMounted(load)
             <span class="field__label">Text</span>
             <textarea v-model="n.body" class="field__input field__input--area" rows="3" />
           </label>
+          <div class="subfield">
+            <div class="subfield__head">
+              <span class="field__label">Bilder (URLs)</span>
+              <button type="button" class="btn btn--small" @click="n.images.push('')">+ Bild</button>
+            </div>
+            <div v-for="(_, j) in n.images" :key="j" class="field--removable">
+              <input v-model="n.images[j]" class="field__input" type="url" placeholder="https://…" />
+              <button type="button" class="btn btn--icon" aria-label="Bild entfernen" @click="n.images.splice(j, 1)">✕</button>
+            </div>
+          </div>
         </div>
         <p v-if="!form.news.length" class="card__empty">Noch keine Neuigkeiten.</p>
       </section>
@@ -471,6 +491,19 @@ onMounted(load)
   padding: 16px;
   border: 1px solid var(--bd-stroke);
   border-radius: var(--bd-radius-md);
+}
+
+.subfield {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.subfield__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .ms-edit__locked {

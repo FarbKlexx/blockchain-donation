@@ -24,12 +24,20 @@
         {
           "date": "2026-05-28",
           "title": "Warum wir dieses Projekt starten",
-          "body": "Unser Ziel ist es, ein Restaurant zu schaffen, das nicht nur lecker schmeckt, sondern auch die lokale Wirtschaft stärkt. Mit deiner Unterstützung können wir die Küche ausrüsten, das Team aufbauen und die ersten Monate sichern. Jeder Beitrag hilft uns, die Vision eines fairen, regionalen Burger-Restaurants in der Innenstadt zu verwirklichen."
+          "body": "Unser Ziel ist es, ein Restaurant zu schaffen, das nicht nur lecker schmeckt, sondern auch die lokale Wirtschaft stärkt. Mit deiner Unterstützung können wir die Küche ausrüsten, das Team aufbauen und die ersten Monate sichern. Jeder Beitrag hilft uns, die Vision eines fairen, regionalen Burger-Restaurants in der Innenstadt zu verwirklichen.",
+          "images": [
+            "https://picsum.photos/seed/burger-news-1a/800/450",
+            "https://picsum.photos/seed/burger-news-1b/800/450",
+            "https://picsum.photos/seed/burger-news-1c/800/450"
+          ]
         },
         {
           "date": "2026-06-10",
           "title": "So werden die Mittel eingesetzt",
-          "body": "Die Mittel werden direkt in die Ausstattung der Küche, die Auswahl lokaler Lieferanten und die Eröffnungsphase investiert. Wir halten dich über jeden Schritt auf dem Laufenden – von der Planung bis zur ersten Öffnung."
+          "body": "Die Mittel werden direkt in die Ausstattung der Küche, die Auswahl lokaler Lieferanten und die Eröffnungsphase investiert. Wir halten dich über jeden Schritt auf dem Laufenden – von der Planung bis zur ersten Öffnung.",
+          "images": [
+            "https://picsum.photos/seed/burger-news-2/800/450"
+          ]
         }
       ]
     },
@@ -54,7 +62,11 @@
         {
           "date": "2026-06-08",
           "title": "Erste Knoten sind da",
-          "body": "Die erste Charge der Funkmodule ist eingetroffen und die Lötarbeiten haben begonnen. Als Nächstes steht der Aufbau des Routing-Stacks an."
+          "body": "Die erste Charge der Funkmodule ist eingetroffen und die Lötarbeiten haben begonnen. Als Nächstes steht der Aufbau des Routing-Stacks an.",
+          "images": [
+            "https://picsum.photos/seed/mesh-news-1a/800/450",
+            "https://picsum.photos/seed/mesh-news-1b/800/450"
+          ]
         }
       ]
     },
@@ -79,7 +91,10 @@
         {
           "date": "2026-04-30",
           "title": "Ziel erreicht – danke!",
-          "body": "Die Kampagne ist erfolgreich abgeschlossen. Alle Meilensteine wurden von den Validatoren bestätigt und die Mittel vollständig freigegeben."
+          "body": "Die Kampagne ist erfolgreich abgeschlossen. Alle Meilensteine wurden von den Validatoren bestätigt und die Mittel vollständig freigegeben.",
+          "images": [
+            "https://picsum.photos/seed/aetherbound-news-1/800/450"
+          ]
         }
       ]
     },
@@ -104,7 +119,8 @@
         {
           "date": "2026-06-12",
           "title": "Der Truck rollt bald",
-          "body": "Wir haben einen passenden Transporter gefunden und der Küchenumbau läuft. Bald kochen wir die erste Suppe!"
+          "body": "Wir haben einen passenden Transporter gefunden und der Küchenumbau läuft. Bald kochen wir die erste Suppe!",
+          "images": []
         }
       ]
     },
@@ -129,7 +145,11 @@
         {
           "date": "2026-06-05",
           "title": "Flächen gesichert",
-          "body": "Die ersten Aufforstungsflächen sind gepachtet und freigegeben. Jetzt sammeln wir für die Setzlinge."
+          "body": "Die ersten Aufforstungsflächen sind gepachtet und freigegeben. Jetzt sammeln wir für die Setzlinge.",
+          "images": [
+            "https://picsum.photos/seed/eifel-news-1a/800/450",
+            "https://picsum.photos/seed/eifel-news-1b/800/450"
+          ]
         }
       ]
     }
