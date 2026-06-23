@@ -37,15 +37,18 @@ export interface ContractMilestone {
 /** A campaign as read from its `Donation` contract — financials + release state,
  *  no prose. `address` comes from `DonationFactory.getDonations()`. */
 export interface ContractCampaign {
+  // Field names below match the contract's public getters 1:1 (no renaming),
+  // so a future ethers read maps straight onto this shape with no translation.
   /** Deployed contract address — the on-chain identity AND the join key to the
-   *  backend metadata. The frontend derives the short form + explorer URL. */
+   *  backend metadata. Not a stored variable (`address(this)` / the factory
+   *  list entry); the frontend derives the short form + explorer URL. */
   address: string
   /** Campaign owner (`contractOwner`). */
-  owner: string
+  contractOwner: string
   /** Funding goal in the chain's native coin (`donationGoal`). */
-  goal: number
+  donationGoal: number
   /** Total raised so far in native coin (`totalDonations`). */
-  raised: number
+  totalDonations: number
   /** Donor addresses — the key set of the on-chain `donations` mapping (read via
    *  the list getter the contract exposes; a mapping can't be enumerated). The
    *  displayed donor COUNT is DERIVED as `donors.length` — there is no count
@@ -57,7 +60,7 @@ export interface ContractCampaign {
    *  from this — the contract stores only the timestamps. */
   end: number
   /** Lifecycle state (`currentStatus`). The UI's laufend/abgelaufen is derived. */
-  status: ContractStatus
+  currentStatus: ContractStatus
   /** Index of the milestone currently being voted on / paid (`currentMilestone`). */
   currentMilestone: number
   /** Funds released across all milestones so far (`totalPayout`). */

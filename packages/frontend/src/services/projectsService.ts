@@ -74,8 +74,8 @@ async function fetchMetadataById(id: string): Promise<ProjectMetadata | null> {
  *  Funding (within time) and Payout are active; a Funding campaign past its end
  *  (awaiting markAsFailedFunding), Failed and Closed are all "abgelaufen". */
 function deriveProjectStatus(c: ContractCampaign): ProjectStatus {
-  if (c.status === 'Closed' || c.status === 'Failed') return 'abgelaufen'
-  if (c.status === 'Funding' && hasEnded(c.end)) return 'abgelaufen'
+  if (c.currentStatus === 'Closed' || c.currentStatus === 'Failed') return 'abgelaufen'
+  if (c.currentStatus === 'Funding' && hasEnded(c.end)) return 'abgelaufen'
   return 'laufend'
 }
 
@@ -102,7 +102,7 @@ function deriveMilestoneStatus(
   c: ContractCampaign,
 ): MilestoneStatus {
   if (ms.paid) return 'completed'
-  if (c.status === 'Payout' && index === c.currentMilestone && ms.readyToBeApproved) {
+  if (c.currentStatus === 'Payout' && index === c.currentMilestone && ms.readyToBeApproved) {
     return 'in_progress'
   }
   return 'pending'
@@ -112,8 +112,8 @@ function deriveMilestoneStatus(
 
 function toFunding(c: ContractCampaign): Funding {
   return {
-    raised: c.raised,
-    goal: c.goal,
+    raised: c.totalDonations,
+    goal: c.donationGoal,
     // Derived: a mapping has no count, so it comes from the donor list's length.
     donors: c.donors.length,
     // Derived from the on-chain end timestamp (the contract has no "days left").
@@ -162,7 +162,7 @@ function mergeProject(c: ContractCampaign, m: ProjectMetadata): Project {
       const meta = m.milestones[i]
       return {
         index: String(i + 1).padStart(2, '0'),
-        allocated: milestoneAllocated(ms.percentage, c.goal),
+        allocated: milestoneAllocated(ms.percentage, c.donationGoal),
         status: deriveMilestoneStatus(ms, i, c),
         confirmations: ms.approvedCount,
         totalValidators: c.validators.length,
@@ -308,7 +308,7 @@ export async function donate(projectId: string, amount: string): Promise<Donatio
   // real tx.wait(), the new figures would come from re-reading the contract.
   // Append a donor so the derived count (donors.length) grows; on-chain a repeat
   // donor would NOT add a new key — the re-read from chain settles that.
-  campaign.raised += Number(check.value)
+  campaign.totalDonations += Number(check.value)
   campaign.donors.push('0x' + '0'.repeat(40))
 
   return delay({ txHash: '0xMOCK_TX_HASH', funding: toFunding(campaign) })
