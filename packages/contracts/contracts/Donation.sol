@@ -19,6 +19,7 @@ contract Donation{
 
     address[] public donors;
     mapping(address => uint256) public donations;
+
     address[] public validators;
     mapping(address => bool) public isValidator;
 
@@ -138,8 +139,6 @@ contract Donation{
         }
         totalDonations += donation;
         donations[donor] += donation;
-
-
 
         emit DonationReceived(donor, donation);
 
@@ -317,7 +316,6 @@ contract Donation{
     }
 
 
-
     function getContractBalance() external view returns (uint256){
         return address(this).balance;
     }
@@ -325,6 +323,33 @@ contract Donation{
     function getValidator(uint256 x) external view returns (address){
         return validators[x];
     }
+
+    function getDonors() external view returns (address[] memory){
+        return donors;
+    }
+    
+    function getDonorCount() external view returns (uint256) {
+        return donors.length;
+    }
+
+    function getValidators() external view returns (address[] memory){
+        return validators;
+    }
+
+    function getValidatorCount() external view returns (uint256) {
+        return validators.length;
+    }
+
+    function getMilestones() external view returns (Milestone[] memory){
+        Milestone[] memory milestoneArray = new Milestone[](milestoneCount);
+
+        for(uint256 i=0; i < milestoneCount; i++){
+            milestoneArray[i] = milestones[i];
+        }
+
+        return milestoneArray;
+    }
+
 
     //no decimal numbers so we need basepoints
     //basepoints is 100%

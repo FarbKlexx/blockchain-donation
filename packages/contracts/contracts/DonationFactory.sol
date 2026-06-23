@@ -26,15 +26,15 @@ contract DonationFactory {
         return address(donation);
     }
 
-    function getDonations() external view returns (address[] memory) {
+    function getProjects() external view returns (address[] memory) {
         return projects;
     }
 
-    function getDonationsOfSender() external view returns (address[] memory) {
+    function getProjectsOfSender() external view returns (address[] memory) {
         return projectsPerOwner[msg.sender];
     }
 
-    function getDonationsCount() external view returns (uint256) {
+    function getProjectCount() external view returns (uint256) {
         return projects.length;
     }
 }
