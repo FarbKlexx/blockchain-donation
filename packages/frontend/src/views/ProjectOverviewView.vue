@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import type { Project, ProjectSort, ProjectStatus } from '@/types/project'
 import { listProjects } from '@/services/projectsService'
+import { useWalletStore } from '@/stores/wallet'
 import ProjectCard from '@/components/project/ProjectCard.vue'
 import ProjectCardSkeleton from '@/components/project/ProjectCardSkeleton.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
+
+// Any connected account may create a project (no role required).
+const wallet = useWalletStore()
 
 const filters: { value: ProjectStatus; label: string }[] = [
   { value: 'laufend', label: 'Laufend' },
@@ -55,13 +60,22 @@ onMounted(load)
         <h1 class="overview__title">Projekte</h1>
         <p class="overview__count">{{ projects.length }} Ergebnisse</p>
       </div>
-      <div class="overview__sort">
-        <label for="sort" class="overview__sort-label">Sortieren nach</label>
-        <div class="select">
-          <select id="sort" v-model="activeSort">
-            <option v-for="s in sorts" :key="s.value" :value="s.value">{{ s.label }}</option>
-          </select>
-          <AppIcon name="chevron-down" :size="16" />
+      <div class="overview__actions">
+        <RouterLink
+          v-if="wallet.isConnected"
+          :to="{ name: 'project-create' }"
+          class="overview__create"
+        >
+          + Projekt erstellen
+        </RouterLink>
+        <div class="overview__sort">
+          <label for="sort" class="overview__sort-label">Sortieren nach</label>
+          <div class="select">
+            <select id="sort" v-model="activeSort">
+              <option v-for="s in sorts" :key="s.value" :value="s.value">{{ s.label }}</option>
+            </select>
+            <AppIcon name="chevron-down" :size="16" />
+          </div>
         </div>
       </div>
     </header>
@@ -125,6 +139,24 @@ onMounted(load)
 .overview__count {
   font-size: 14px;
   color: var(--bd-grey-text);
+}
+
+.overview__actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.overview__create {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 16px;
+  border-radius: var(--bd-radius-sm);
+  background: var(--bd-black);
+  color: var(--bd-surface);
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .overview__sort {

@@ -1,0 +1,586 @@
+<script setup lang="ts">
+import { computed, reactive, ref } from 'vue'
+import { createProject, type CreateProjectPayload } from '@/services/projectsService'
+import { useWalletStore } from '@/stores/wallet'
+import { NATIVE_CURRENCY, NATIVE_DECIMALS, validateAmount } from '@/utils/amount'
+import { shortenAddress } from '@/utils/address'
+import AppIcon from '@/components/ui/AppIcon.vue'
+
+// Create a project — open to ANY connected account (no role required). The
+// dataset is split along the contract boundary: the "Smart Contract" section is
+// what DonationFactory.createDonation stores (and becomes immutable); the rest
+// is off-chain metadata. The connected account becomes the on-chain owner.
+// Submit is a placeholder (no deploy, no POST) — see services/createProject.
+const wallet = useWalletStore()
+
+const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/
+const ZERO_ADDRESS = '0x' + '0'.repeat(40)
+
+const form = reactive({
+  // ── Backend metadata ──
+  title: '',
+  summary: '',
+  category: '',
+  image: '',
+  description: [''],
+  news: [] as { date: string; title: string; body: string }[],
+  // ── Smart contract ──
+  goal: '',
+  durationDays: '',
+  onchainDescription: '',
+  validators: [''],
+  // percentage is %, converted to basis points on submit
+  milestones: [{ percent: '', title: '', description: '' }],
+})
+
+const attempted = ref(false)
+const submitting = ref(false)
+const created = ref<{ address: string } | null>(null)
+
+// Entirely-blank milestone rows (no %, title, or description) are ignored — like
+// the description/news lists — so a leftover empty row never blocks submit.
+const filledMilestones = computed(() =>
+  form.milestones.filter((m) => m.percent.trim() || m.title.trim() || m.description.trim()),
+)
+// Milestone percentages → basis points; the contract requires the sum == 10000.
+// (Percentages are restricted to ≤2 decimals below, so this rounding is exact.)
+const milestoneBps = computed(() =>
+  filledMilestones.value.map((m) => {
+    const n = Number(m.percent)
+    return Number.isFinite(n) && n > 0 ? Math.round(n * 100) : 0
+  }),
+)
+const totalBps = computed(() => milestoneBps.value.reduce((s, b) => s + b, 0))
+
+const filledValidators = computed(() => form.validators.map((v) => v.trim()).filter(Boolean))
+
+const errors = computed(() => {
+  const e: string[] = []
+  if (!form.title.trim()) e.push('Titel ist erforderlich.')
+
+  const goalCheck = validateAmount(form.goal, NATIVE_DECIMALS)
+  if (!goalCheck.ok) e.push(`Finanzierungsziel: ${goalCheck.error}`)
+
+  const days = Number(form.durationDays)
+  if (!Number.isInteger(days) || days <= 0) e.push('Laufzeit muss eine ganze Zahl an Tagen > 0 sein.')
+
+  // Validators: ≥1, valid format, unique, none equal to the creator.
+  const vs = filledValidators.value
+  if (vs.length === 0) e.push('Mindestens ein Validator ist erforderlich.')
+  if (vs.some((v) => !ADDRESS_RE.test(v))) e.push('Validator-Adressen müssen das Format 0x… (40 Hex) haben.')
+  if (vs.some((v) => v.toLowerCase() === ZERO_ADDRESS))
+    e.push('Die Null-Adresse (0x000…000) ist als Validator nicht erlaubt.')
+  const lower = vs.map((v) => v.toLowerCase())
+  if (new Set(lower).size !== lower.length) e.push('Validator-Adressen müssen eindeutig sein.')
+  if (wallet.address && lower.includes(wallet.address.toLowerCase()))
+    e.push('Du selbst (Ersteller) kannst kein Validator sein.')
+
+  // Milestones (blank rows ignored): ≥1, each a positive % with ≤2 decimals and
+  // a title, summing to exactly 100%.
+  const ms = filledMilestones.value
+  if (ms.length === 0) e.push('Mindestens ein Meilenstein ist erforderlich.')
+  if (ms.some((m) => m.percent.trim() && !/^\d+(\.\d{1,2})?$/.test(m.percent.trim())))
+    e.push('Meilenstein-Anteile dürfen höchstens 2 Nachkommastellen haben.')
+  if (milestoneBps.value.some((b) => b <= 0)) e.push('Jeder Meilenstein braucht einen Anteil > 0 %.')
+  if (ms.some((m) => !m.title.trim())) e.push('Jeder Meilenstein braucht einen Titel.')
+  if (totalBps.value !== 10000)
+    e.push(`Die Meilenstein-Anteile müssen exakt 100 % ergeben (aktuell ${totalBps.value / 100} %).`)
+
+  return e
+})
+
+const isValid = computed(() => errors.value.length === 0)
+
+function addParagraph() {
+  form.description.push('')
+}
+function removeParagraph(i: number) {
+  form.description.splice(i, 1)
+}
+function addValidator() {
+  form.validators.push('')
+}
+function removeValidator(i: number) {
+  form.validators.splice(i, 1)
+}
+function addMilestone() {
+  form.milestones.push({ percent: '', title: '', description: '' })
+}
+function removeMilestone(i: number) {
+  form.milestones.splice(i, 1)
+}
+function addNews() {
+  form.news.push({ date: '', title: '', body: '' })
+}
+function removeNews(i: number) {
+  form.news.splice(i, 1)
+}
+
+async function submit() {
+  attempted.value = true
+  if (!isValid.value || submitting.value) return
+  submitting.value = true
+  created.value = null
+  try {
+    const goalCheck = validateAmount(form.goal, NATIVE_DECIMALS)
+    const payload: CreateProjectPayload = {
+      contract: {
+        goal: goalCheck.ok ? goalCheck.value : form.goal,
+        durationSeconds: Number(form.durationDays) * 86400,
+        description: form.onchainDescription.trim(),
+        validators: filledValidators.value,
+        milestonePercentagesBps: milestoneBps.value,
+      },
+      metadata: {
+        title: form.title.trim(),
+        summary: form.summary.trim(),
+        category: form.category.trim(),
+        image: form.image.trim(),
+        description: form.description.map((p) => p.trim()).filter(Boolean),
+        milestones: filledMilestones.value.map((m) => ({
+          title: m.title.trim(),
+          description: m.description.trim(),
+        })),
+        news: form.news
+          .filter((n) => n.title.trim() || n.body.trim())
+          .map((n) => ({ date: n.date, title: n.title.trim(), body: n.body.trim() })),
+      },
+    }
+    const result = await createProject(payload)
+    created.value = { address: result.address }
+  } finally {
+    submitting.value = false
+  }
+}
+</script>
+
+<template>
+  <div class="create">
+    <div class="create__topbar">
+      <RouterLink :to="{ name: 'home' }" class="create__back">← Alle Projekte</RouterLink>
+    </div>
+
+    <form class="create__form" @submit.prevent="submit">
+      <header class="create__head">
+        <div>
+          <h1 class="create__title">Projekt erstellen</h1>
+          <p class="create__subtitle">
+            Du wirst Eigentümer dieses Projekts (Wallet {{ shortenAddress(wallet.address ?? '') }}).
+          </p>
+        </div>
+        <button type="submit" class="btn btn--primary" :disabled="submitting">
+          {{ submitting ? 'Erstelle …' : 'Projekt erstellen' }}
+        </button>
+      </header>
+
+      <p v-if="created" class="create__saved" role="status">
+        Projekt <strong>würde erstellt</strong>: Vertrag via Factory + Metadaten ans Backend. Im
+        Prototyp passiert nichts (Platzhalter, Adresse z. B. <code>{{ created.address }}</code>).
+        <RouterLink :to="{ name: 'home' }">Zur Übersicht</RouterLink>
+      </p>
+
+      <ul v-if="attempted && !isValid" class="create__errors" role="alert">
+        <li v-for="(err, i) in errors" :key="i">{{ err }}</li>
+      </ul>
+
+      <!-- Backend: Stammdaten -->
+      <section class="card">
+        <h2 class="card__title">Stammdaten</h2>
+        <p class="card__hint">Off-chain – im Backend gespeichert, später jederzeit editierbar.</p>
+        <label class="field">
+          <span class="field__label">Titel *</span>
+          <input v-model="form.title" class="field__input" type="text" />
+        </label>
+        <label class="field">
+          <span class="field__label">Kurzbeschreibung</span>
+          <textarea v-model="form.summary" class="field__input field__input--area" rows="2" />
+        </label>
+        <div class="field__row">
+          <label class="field">
+            <span class="field__label">Kategorie</span>
+            <input v-model="form.category" class="field__input" type="text" />
+          </label>
+          <label class="field">
+            <span class="field__label">Bild-URL</span>
+            <input v-model="form.image" class="field__input" type="url" />
+          </label>
+        </div>
+      </section>
+
+      <!-- Backend: Beschreibung -->
+      <section class="card">
+        <div class="card__head">
+          <h2 class="card__title">Ausführliche Beschreibung</h2>
+          <button type="button" class="btn btn--small" @click="addParagraph">+ Absatz</button>
+        </div>
+        <div v-for="(_, i) in form.description" :key="i" class="field field--removable">
+          <textarea v-model="form.description[i]" class="field__input field__input--area" rows="3" />
+          <button type="button" class="btn btn--icon" aria-label="Absatz entfernen" @click="removeParagraph(i)">✕</button>
+        </div>
+      </section>
+
+      <!-- Contract: Finanzierung -->
+      <section class="card card--chain">
+        <h2 class="card__title"><AppIcon name="lock" :size="14" /> Finanzierung (Smart Contract)</h2>
+        <p class="card__hint">
+          Wird im Vertrag gespeichert und ist nach der Erstellung <strong>unveränderlich</strong>.
+        </p>
+        <div class="field__row">
+          <label class="field">
+            <span class="field__label">Finanzierungsziel ({{ NATIVE_CURRENCY }}) *</span>
+            <input v-model="form.goal" class="field__input" type="text" inputmode="decimal" placeholder="z. B. 50000" />
+          </label>
+          <label class="field">
+            <span class="field__label">Laufzeit (Tage) *</span>
+            <input v-model="form.durationDays" class="field__input" type="number" min="1" step="1" />
+          </label>
+        </div>
+        <label class="field">
+          <span class="field__label">On-Chain-Beschreibung</span>
+          <textarea v-model="form.onchainDescription" class="field__input field__input--area" rows="2" />
+        </label>
+      </section>
+
+      <!-- Contract: Validatoren -->
+      <section class="card card--chain">
+        <div class="card__head">
+          <h2 class="card__title"><AppIcon name="lock" :size="14" /> Validatoren (Smart Contract)</h2>
+          <button type="button" class="btn btn--small" @click="addValidator">+ Validator</button>
+        </div>
+        <p class="card__hint">
+          Mindestens eine Adresse, eindeutig, nicht deine eigene. Diese Konten stimmen über
+          Meilenstein-Freigaben ab.
+        </p>
+        <div v-for="(_, i) in form.validators" :key="i" class="field field--removable">
+          <input v-model="form.validators[i]" class="field__input field__input--mono" type="text" placeholder="0x…" />
+          <button type="button" class="btn btn--icon" aria-label="Validator entfernen" @click="removeValidator(i)">✕</button>
+        </div>
+      </section>
+
+      <!-- Contract + Backend: Meilensteine -->
+      <section class="card">
+        <div class="card__head">
+          <h2 class="card__title">Meilensteine</h2>
+          <span class="total" :class="{ 'total--ok': totalBps === 10000 }">Summe {{ totalBps / 100 }} % / 100 %</span>
+        </div>
+        <p class="card__hint">
+          Anteil (%) wird im Vertrag gespeichert (Summe muss 100 % sein); Titel & Beschreibung im
+          Backend.
+        </p>
+        <div v-for="(m, i) in form.milestones" :key="i" class="ms-create">
+          <div class="field__row">
+            <label class="field field--pct">
+              <span class="field__label">Anteil %</span>
+              <input v-model="m.percent" class="field__input" type="number" min="0" step="0.01" />
+            </label>
+            <label class="field">
+              <span class="field__label">Titel</span>
+              <input v-model="m.title" class="field__input" type="text" />
+            </label>
+            <button type="button" class="btn btn--icon" aria-label="Meilenstein entfernen" @click="removeMilestone(i)">✕</button>
+          </div>
+          <label class="field">
+            <span class="field__label">Beschreibung</span>
+            <textarea v-model="m.description" class="field__input field__input--area" rows="2" />
+          </label>
+        </div>
+        <button type="button" class="btn btn--small" @click="addMilestone">+ Meilenstein</button>
+      </section>
+
+      <!-- Backend: Neuigkeiten (optional) -->
+      <section class="card">
+        <div class="card__head">
+          <h2 class="card__title">Neuigkeiten <span class="card__opt">optional</span></h2>
+          <button type="button" class="btn btn--small" @click="addNews">+ Eintrag</button>
+        </div>
+        <div v-for="(n, i) in form.news" :key="i" class="news-create">
+          <div class="field__row">
+            <label class="field field--date">
+              <span class="field__label">Datum</span>
+              <input v-model="n.date" class="field__input" type="date" />
+            </label>
+            <label class="field">
+              <span class="field__label">Titel</span>
+              <input v-model="n.title" class="field__input" type="text" />
+            </label>
+            <button type="button" class="btn btn--icon" aria-label="Eintrag entfernen" @click="removeNews(i)">✕</button>
+          </div>
+          <label class="field">
+            <span class="field__label">Text</span>
+            <textarea v-model="n.body" class="field__input field__input--area" rows="3" />
+          </label>
+        </div>
+        <p v-if="!form.news.length" class="card__empty">Noch keine Neuigkeiten – kann auch später ergänzt werden.</p>
+      </section>
+
+      <div class="create__footer">
+        <RouterLink :to="{ name: 'home' }" class="btn btn--ghost">Abbrechen</RouterLink>
+        <button type="submit" class="btn btn--primary" :disabled="submitting">
+          {{ submitting ? 'Erstelle …' : 'Projekt erstellen' }}
+        </button>
+      </div>
+    </form>
+  </div>
+</template>
+
+<style scoped>
+.create {
+  display: flex;
+  flex-direction: column;
+  padding: 0 var(--bd-page-gutter) 64px;
+}
+
+.create__topbar {
+  padding: 48px 0 16px;
+}
+
+.create__back {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--bd-grey-text);
+}
+.create__back:hover {
+  color: var(--bd-black);
+}
+
+.create__form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 760px;
+}
+
+.create__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.create__title {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--bd-black);
+}
+
+.create__subtitle {
+  font-size: 14px;
+  color: var(--bd-grey-text);
+}
+
+.create__saved {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 12px 14px;
+  border-radius: var(--bd-radius-md);
+  color: var(--bd-green);
+  background: var(--bd-green-tint);
+  border: 1px solid var(--bd-green);
+}
+
+.create__saved code {
+  font-family: var(--bd-font-stats, monospace);
+}
+
+.create__errors {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px 12px 30px;
+  border-radius: var(--bd-radius-md);
+  background: #fef2f2;
+  border: 1px solid #dc2626;
+  color: #dc2626;
+  font-size: 13px;
+  list-style: disc;
+}
+
+/* Cards */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  background: var(--bd-surface);
+  border: 1px solid var(--bd-stroke);
+  border-radius: var(--bd-radius-lg);
+  box-shadow: var(--bd-shadow-card);
+}
+
+.card--chain {
+  border-color: var(--bd-stroke);
+  background: var(--bd-grey);
+  box-shadow: none;
+}
+
+.card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.card__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--bd-black);
+}
+
+.card__opt,
+.card__hint,
+.card__empty {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--bd-grey-text);
+}
+
+.card__opt {
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.total {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--bd-grey-text);
+}
+.total--ok {
+  color: var(--bd-green);
+}
+
+/* Fields (shared shape with the edit view) */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.field--removable {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.field--date {
+  flex: 0 0 170px;
+}
+.field--pct {
+  flex: 0 0 120px;
+}
+
+.field__row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+}
+
+.field__label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--bd-grey-text);
+}
+
+.field__input {
+  width: 100%;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--bd-black);
+  background: var(--bd-surface);
+  border: 1px solid var(--bd-stroke);
+  border-radius: var(--bd-radius-sm);
+  padding: 10px 12px;
+}
+
+.field__input:focus {
+  outline: none;
+  border-color: var(--bd-black);
+}
+
+.field__input--area {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.field__input--mono {
+  font-family: var(--bd-font-stats, monospace);
+}
+
+.ms-create,
+.news-create {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--bd-stroke);
+  border-radius: var(--bd-radius-md);
+  background: var(--bd-surface);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--bd-radius-sm);
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 10px 16px;
+}
+
+.btn--primary {
+  background: var(--bd-black);
+  color: var(--bd-surface);
+}
+.btn--primary:disabled {
+  opacity: 0.6;
+}
+
+.btn--ghost {
+  background: transparent;
+  color: var(--bd-grey-text);
+  border: 1px solid var(--bd-stroke);
+}
+
+.btn--small {
+  align-self: flex-start;
+  padding: 6px 12px;
+  font-size: 13px;
+  background: var(--bd-grey);
+  color: var(--bd-black);
+}
+
+.btn--icon {
+  flex-shrink: 0;
+  padding: 8px 10px;
+  background: transparent;
+  color: var(--bd-grey-text);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.create__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+@media (max-width: 640px) {
+  .field__row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+</style>

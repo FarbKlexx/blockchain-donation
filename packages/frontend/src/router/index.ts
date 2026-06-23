@@ -36,6 +36,16 @@ const router = createRouter({
       },
     },
     {
+      path: '/projekt-erstellen',
+      name: 'project-create',
+      component: () => import('@/views/ProjectCreateView.vue'),
+      // Any connected account may create (no role required); the creator becomes
+      // the on-chain owner. Only gates that a session exists.
+      beforeEnter: () => {
+        if (!useWalletStore().isConnected) return { name: 'home' }
+      },
+    },
+    {
       path: '/meine-projekte',
       name: 'my-projects',
       component: () => import('@/views/MyProjectsView.vue'),

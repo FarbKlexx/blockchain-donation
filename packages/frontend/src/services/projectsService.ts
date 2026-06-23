@@ -446,6 +446,75 @@ export async function updateProjectMetadata(
   return delay(undefined)
 }
 
+/** Everything needed to create a project, split along the contract boundary.
+ *  `contract` → DonationFactory.createDonation (the creator becomes owner);
+ *  `metadata` → the backend, keyed by the new contract address once known. */
+export interface CreateProjectPayload {
+  contract: {
+    /** Funding goal as a validated decimal STRING (native coin) → parseEther. */
+    goal: string
+    /** Campaign length in seconds (`duration`). */
+    durationSeconds: number
+    /** On-chain description (set once at creation, then immutable). */
+    description: string
+    /** Validator addresses — distinct, non-empty, none equal to the creator. */
+    validators: string[]
+    /** Milestone shares in basis points; must sum to 10000. */
+    milestonePercentagesBps: number[]
+  }
+  metadata: {
+    title: string
+    summary: string
+    category: string
+    image: string
+    description: string[]
+    /** Milestone display texts, in the same order as the percentages above. */
+    milestones: { title: string; description: string }[]
+    news: { date: string; title: string; body: string }[]
+  }
+}
+
+export interface CreateProjectResult {
+  /** Address of the newly deployed Donation contract. */
+  address: string
+  /** Creation transaction hash. */
+  txHash: string
+}
+
+/**
+ * Create a project. Available to ANY connected account (no role required) — the
+ * creator becomes the on-chain owner. Two steps: deploy via the factory, then
+ * store the off-chain metadata keyed by the new address.
+ *
+ * TODO(integration):
+ *   // 1) on-chain — owner = msg.sender (the connected signer):
+ *   const factory = DonationFactory__factory.connect(VITE_FACTORY_ADDRESS, signer)
+ *   const tx = await factory.createDonation(
+ *     parseEther(payload.contract.goal),
+ *     payload.contract.validators,
+ *     payload.contract.description,
+ *     payload.contract.durationSeconds,
+ *     payload.contract.milestonePercentagesBps,
+ *   )
+ *   const receipt = await tx.wait()
+ *   const address = <read the DonationContractCreated event from receipt>
+ *   // 2) off-chain — POST the metadata keyed by that address:
+ *   await fetch('/api/projects', {
+ *     method: 'POST', headers: { 'content-type': 'application/json' },
+ *     body: JSON.stringify({ address, ...payload.metadata }),
+ *   })
+ * Handle partial failure (contract deployed but metadata POST failed) explicitly.
+ *
+ * [mock] Placeholder: deploys nothing, POSTs nothing, mutates nothing.
+ */
+export async function createProject(payload: CreateProjectPayload): Promise<CreateProjectResult> {
+  assertLocalSigner()
+  if (import.meta.env.DEV) {
+    console.info('[projectsService] createProject — mock no-op (nothing deployed/persisted):', payload)
+  }
+  return delay({ address: '0xMOCK_NEW_PROJECT_ADDRESS', txHash: '0xMOCK_CREATE_TX_HASH' })
+}
+
 export interface WalletConnection {
   address: string
 }

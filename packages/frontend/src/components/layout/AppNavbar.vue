@@ -80,6 +80,14 @@ onUnmounted(() => window.removeEventListener('click', closeMenu))
           </template>
         </div>
         <RouterLink
+          :to="{ name: 'project-create' }"
+          class="menu__item"
+          role="menuitem"
+          @click="closeMenu"
+        >
+          Projekt erstellen
+        </RouterLink>
+        <RouterLink
           v-if="wallet.hasAnyRole"
           :to="{ name: 'my-projects' }"
           class="menu__item"
