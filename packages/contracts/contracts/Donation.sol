@@ -30,7 +30,6 @@ contract Donation{
 
     struct Milestone{
         uint16 percentage;
-        bool readyToBeApproved;
         uint16 approvedCount;
         uint16 rejectedCount;
         bool paid;
@@ -64,10 +63,6 @@ contract Donation{
         bool approved
     );
 
-    event VotesEnabled(
-        uint256 milestoneIndex
-    );
-
     event PayoutMade(
         uint256 milestoneIndex,
         uint256 amount
@@ -97,7 +92,7 @@ contract Donation{
         for(uint i = 0; i < milestonePercentages.length; i++){
             require(milestonePercentages[i] > 0, "Milestone percentage must be positive");
             totalPercentage += milestonePercentages[i];
-            milestones.push(Milestone(milestonePercentages[i], false, 0, 0, false));
+            milestones.push(Milestone(milestonePercentages[i], 0, 0, false));
         }
         require(totalPercentage == basepoints, "Milestones percent have to add up to 10000");
 
@@ -147,13 +142,7 @@ contract Donation{
         }
     }
 
-    function enableVoting(uint256 milestoneIndex) external isOwner() onlyDuringPayout() isMilestone(milestoneIndex) isCurrentMilestone(milestoneIndex) {
-        require(!milestones[milestoneIndex].readyToBeApproved, "Voting has already been enabled");
-        milestones[milestoneIndex].readyToBeApproved = true;
-        emit VotesEnabled(milestoneIndex);
-    }
-
-    function voteMilestone(uint milestoneIndex, bool vote) external isAllowedToVote onlyDuringPayout() isMilestone(milestoneIndex) isCurrentMilestone(milestoneIndex) isReadyToBeApproved(milestoneIndex) {
+    function voteMilestone(uint milestoneIndex, bool vote) external isAllowedToVote onlyDuringPayout() isMilestone(milestoneIndex) isLastMilestone(milestoneIndex) {
         require(!hasVoted[milestoneIndex][msg.sender], "Validator has already voted");
 
         hasVoted[milestoneIndex][msg.sender] = true;
@@ -176,7 +165,7 @@ contract Donation{
         }
     }
 
-    function payout(uint milestoneIndex) external isOwner onlyDuringPayout() isMilestone(milestoneIndex) isCurrentMilestone(milestoneIndex) isApproved(milestoneIndex){
+    function payout(uint milestoneIndex) external isOwner onlyDuringPayout() isMilestone(milestoneIndex) isCurrentMilestone(milestoneIndex) lastMilestoneApproved(currentMilestone){
         require(!milestones[milestoneIndex].paid, "This Milestone has already been paid");
         
         uint256 milestonePayout = calculatePortion(totalDonations, milestones[milestoneIndex].percentage);
@@ -252,16 +241,6 @@ contract Donation{
         _;
     }
 
-    modifier isReadyToBeApproved(uint256 milestoneIndex){
-        require(milestones[milestoneIndex].readyToBeApproved);
-        _;
-    }
-
-    modifier isApproved(uint256 milestoneIndex){
-        require(calculatePercentageInBps(milestones[milestoneIndex].approvedCount, validators.length) >= neededVoteMajorityInBps, "Milestone is not yet approved");
-        _;
-    }
-
     modifier isMilestone(uint256 x){
         require(x < milestones.length, "Milestone does not exist");
         _;
@@ -280,6 +259,19 @@ contract Donation{
 
     modifier isCurrentMilestone(uint256 milestoneIndex){
         require(milestoneIndex == currentMilestone, "Chosen Milestone is not the current Milestone");
+        _;
+    }
+
+    modifier isLastMilestone(uint256 milestoneIndex){
+        require(currentMilestone > 0, "The first milestone has no predecessor");
+        require(milestoneIndex == currentMilestone - 1, "Chosen Milestone is not the last Milestone");
+        _;
+    }
+
+    modifier lastMilestoneApproved(uint256 milestoneIndex){
+        if (milestoneIndex > 0){
+            require(calculatePercentageInBps(milestones[milestoneIndex-1].approvedCount, validators.length) >= neededVoteMajorityInBps, "Last Milestone is not yet approved");
+        }
         _;
     }
 

@@ -112,54 +112,11 @@ contract DonationTest is Test {
   }
 
 
-
-  function test_EnableVotingByOwner() public {
-    uint256 milestoneIndex = donation.currentMilestone();
-    donation.donate{value:donationGoal}();
-
-    vm.expectEmit(false, false, false, true);
-    emit Donation.VotesEnabled(milestoneIndex);
-    vm.prank(owner);
-    donation.enableVoting(milestoneIndex);
-
-    
-    (, bool readyToBeApproved, , ,) = donation.milestones(0);
-
-    assertTrue(readyToBeApproved);
-  }
-
-  function test_EnableVotingByNonOwner() public {
-    uint256 milestoneIndex = donation.currentMilestone();
-    donation.donate{value:donationGoal}();
-    address nonOwner = makeAddr("nonOwner");
-    vm.prank(nonOwner);
-    vm.expectRevert();
-    donation.enableVoting(milestoneIndex);
-  }
-
-  function test_EnableVotingDuringFunding() public {
-    uint256 milestoneIndex = donation.currentMilestone();
-    vm.prank(owner);
-    vm.expectRevert();
-    donation.enableVoting(milestoneIndex);
-  }
-
-    function test_EnableVotingWrongMilestone() public {
-    uint256 milestoneIndex = donation.currentMilestone() + 1;
-    donation.donate{value:donationGoal}();
-    vm.prank(owner);
-    vm.expectRevert();
-    donation.enableVoting(milestoneIndex);
-  }
-
   function test_VoteByValidator() public {
     donation.donate{value: donationGoal}();
     uint256 milestoneIndex = donation.currentMilestone();
     bool vote = true;
     address validator = validators[0];
-
-    vm.prank(owner);
-    donation.enableVoting(milestoneIndex);
 
     vm.expectEmit(true, false, false, true);
     emit Donation.VoteSubmitted(validator, milestoneIndex, vote);
@@ -174,9 +131,6 @@ contract DonationTest is Test {
     donation.donate{value: donationGoal}();
     uint256 milestoneIndex = donation.currentMilestone();
 
-    vm.prank(owner);
-    donation.enableVoting(milestoneIndex);
-
     vm.prank(makeAddr("nonValidator"));
     vm.expectRevert();
     donation.voteMilestone(milestoneIndex, true);
@@ -185,9 +139,6 @@ contract DonationTest is Test {
   function test_VoteByValidatorWrongMilestone() public {
     donation.donate{value: donationGoal}();
     uint256 milestoneIndex = donation.currentMilestone();
-
-    vm.prank(owner);
-    donation.enableVoting(milestoneIndex);
 
     vm.prank(validators[0]);
     vm.expectRevert();
@@ -199,9 +150,6 @@ contract DonationTest is Test {
     uint256 milestoneIndex = donation.currentMilestone();
     bool vote = false;
     address validator = validators[0];
-
-    vm.prank(owner);
-    donation.enableVoting(milestoneIndex);
 
     vm.expectEmit(true, false, false, true);
     emit Donation.VoteSubmitted(validator, milestoneIndex, vote);
