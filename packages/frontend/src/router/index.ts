@@ -21,6 +21,21 @@ const router = createRouter({
       props: true,
     },
     {
+      path: '/projects/:id/bearbeiten',
+      name: 'project-edit',
+      component: () => import('@/views/ProjectEditView.vue'),
+      props: true,
+      // Must own at least one project to reach an edit page; the view itself
+      // re-checks ownership of THIS specific project (and shows "denied"
+      // otherwise). Like all role checks, this only gates UI — the backend must
+      // authorize the actual save.
+      beforeEnter: (to) => {
+        const wallet = useWalletStore()
+        if (!wallet.isConnected) return { name: 'home' }
+        if (!wallet.roles.owner) return { name: 'project-detail', params: { id: to.params.id } }
+      },
+    },
+    {
       path: '/meine-projekte',
       name: 'my-projects',
       component: () => import('@/views/MyProjectsView.vue'),

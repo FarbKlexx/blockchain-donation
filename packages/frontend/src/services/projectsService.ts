@@ -366,6 +366,49 @@ export async function donate(projectId: string, amount: string): Promise<Donatio
   return delay({ txHash: '0xMOCK_TX_HASH', funding: toFunding(campaign) })
 }
 
+/** The editable, OFF-CHAIN slice of a project — exactly the metadata an owner
+ *  may change. Mirrors the backend `ProjectMetadata` payload (minus the join
+ *  keys). Nothing contract-owned (goal/donations/validators/milestone funds,
+ *  order or status) appears here — those are immutable after deployment. */
+export interface ProjectMetadataPatch {
+  title: string
+  summary: string
+  category: string
+  image: string
+  description: string[]
+  milestones: { index: string; title: string; description: string }[]
+  news: { date: string; title: string; body: string }[]
+}
+
+/**
+ * Save edited project metadata (owner-only, off-chain).
+ *
+ * TODO(integration): PUT/POST the patch to the backend, e.g.
+ *   await fetch(`/api/projects/${id}`, {
+ *     method: 'PUT', headers: { 'content-type': 'application/json' },
+ *     body: JSON.stringify(patch),
+ *   })
+ * AUTHORIZE ON THE BACKEND: verify the caller actually controls the project's
+ * `contractOwner` (e.g. a SIWE session) before accepting — the frontend
+ * owner-check is UX only and must never be the security boundary. Contract data
+ * is never sent here; it cannot be changed off-chain.
+ *
+ * [mock] Prototype no-op: intentionally does NOT mutate the in-memory metadata,
+ * so "Speichern" persists nothing yet.
+ */
+export async function updateProjectMetadata(
+  id: string,
+  patch: ProjectMetadataPatch,
+): Promise<void> {
+  if (import.meta.env.DEV) {
+    console.info('[projectsService] updateProjectMetadata — mock no-op (nothing persisted):', {
+      id,
+      patch,
+    })
+  }
+  return delay(undefined)
+}
+
 export interface WalletConnection {
   address: string
 }

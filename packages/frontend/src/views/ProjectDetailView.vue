@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { Funding, Project } from '@/types/project'
 import { getProject } from '@/services/projectsService'
+import { useWalletStore } from '@/stores/wallet'
 import { formatDate } from '@/utils/format'
 import ProjectHero from '@/components/project/ProjectHero.vue'
 import FundingCard from '@/components/project/FundingCard.vue'
@@ -24,6 +25,13 @@ const tabs: { key: TabKey; label: string }[] = [
 const project = ref<Project | null>(null)
 const loading = ref(true)
 const activeTab = ref<TabKey>('beschreibung')
+
+// Owner of THIS project (from the session's cached memberships) → may edit its
+// off-chain metadata. UI gating only; the save is authorized by the backend.
+const wallet = useWalletStore()
+const isOwner = computed(
+  () => !!project.value && wallet.roleInProject(project.value.contract.address).isOwner,
+)
 
 // Lifecycle gate (Spende → Stimme → Auszahlung): validators may only vote on
 // milestones once the funding goal is reached. The milestone UI keys off this,
@@ -83,6 +91,15 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
     <!-- Always visible (needs no data) — keeps the layout stable across loading. -->
     <div class="detail__topbar">
       <RouterLink :to="{ name: 'home' }" class="detail__back">← Alle Projekte</RouterLink>
+      <!-- Owner-only: edit the project's off-chain metadata. -->
+      <RouterLink
+        v-if="project && isOwner"
+        :to="{ name: 'project-edit', params: { id: project.id } }"
+        class="detail__edit"
+      >
+        <AppIcon name="pencil" :size="14" />
+        Projekt bearbeiten
+      </RouterLink>
     </div>
 
     <ProjectDetailSkeleton v-if="loading" />
@@ -185,7 +202,28 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
 }
 
 .detail__topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   padding: 48px var(--bd-page-gutter) 16px;
+}
+
+.detail__edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: 1px solid var(--bd-stroke);
+  border-radius: var(--bd-radius-sm);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--bd-black);
+  background: var(--bd-surface);
+}
+
+.detail__edit:hover {
+  border-color: var(--bd-black);
 }
 
 .detail__hero-wrap {
