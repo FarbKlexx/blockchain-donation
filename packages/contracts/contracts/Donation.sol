@@ -197,7 +197,7 @@ contract Donation{
         milestones[milestoneIndex].paid = true;
         totalPayout += milestonePayout;
         
-        if (currentMilestone < milestones.length){
+        if (currentMilestone < milestones.length - 1){
             currentMilestone++;
         }else{
             Status oldStatus = currentStatus;
@@ -360,6 +360,10 @@ contract Donation{
 
     function getMilestones() external view returns (Milestone[] memory){
         return milestones;
+    }
+
+    function getMilestoneCount() external view returns (uint256){
+        return milestones.length;
     }
 
 

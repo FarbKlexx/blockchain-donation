@@ -111,6 +111,31 @@ contract DonationTest is Test {
     require(donation.currentStatus() == Donation.Status.Payout);
   }
 
+  function test_Closed() public {
+    require(donation.currentStatus() == Donation.Status.Funding);
+    donation.donate{value: donationGoal / 2}();
+    require(donation.currentStatus() == Donation.Status.Funding);
+    donation.donate{value: donationGoal / 2}();
+    require(donation.currentStatus() == Donation.Status.Payout);
+
+
+    uint256 currentMilestone = donation.currentMilestone();
+
+    for(uint256 i = 0; i < milestonePercentages.length - 1; i++){
+      vm.prank(owner);
+      donation.payout(currentMilestone);
+      for(uint256 j = 0; j < validators.length; j++){
+        vm.prank(validators[j]);
+        donation.voteMilestone(currentMilestone, true);
+      }
+      currentMilestone = donation.currentMilestone();
+    }
+
+    vm.prank(owner);
+    donation.payout(currentMilestone);
+
+    require(donation.currentStatus() == Donation.Status.Closed);
+  }
 
   function test_VoteByValidator() public {
     donation.donate{value: donationGoal}();
