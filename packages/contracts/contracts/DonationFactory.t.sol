@@ -14,38 +14,42 @@ contract DonationFactoryTest is Test {
     address validator1 =  makeAddr("val1");
     address validator2 = makeAddr("val2");
 
+    address[] validators = new address[](2);
+
+
+    uint256[] milestoneAmounts1 = new uint256[](2);
+    string[] milestoneDescriptions1 = new string[](2);
+
+    uint256[] milestoneAmounts2 = new uint256[](2);
+    string[] milestoneDescriptions2 = new string[](2);
+
+
     function setUp() public {
         factory = new DonationFactory();
+        validators[0] = validator1;
+        validators[1] = validator2;
+
+        milestoneAmounts1[0] = 1200;
+        milestoneAmounts1[1] = 5000;
+
+        milestoneDescriptions1[0] = "milestone1";
+        milestoneDescriptions1[1] = "milestone2";
     }
 
     function test_CreateDonation() public {
 
-        address[] memory validators = new address[](2);
-        validators[0] = validator1;
-        validators[1] = validator2;
-
-        uint16[] memory milestones = new uint16[](2);
-        milestones[0] = 5000;
-        milestones[1] = 5000;
-
         vm.prank(owner);
 
-        address donationAddress = factory.createDonation(10 ether, validators, "Description", 30 days, milestones);
+        address donationAddress = factory.createDonation(validators, "Description", 30 days, milestoneAmounts1, milestoneDescriptions1);
 
         assertTrue(donationAddress != address(0));
     }
 
     function test_StoresDonationAddress() public {
 
-        address[] memory validators = new address[](1);
-        validators[0] = validator1;
-
-        uint16[] memory milestones = new uint16[](1);
-        milestones[0] = 10000;
-
         vm.prank(owner);
 
-        address donationAddress = factory.createDonation(1 ether, validators, "Test", 1 days, milestones);
+        address donationAddress = factory.createDonation( validators, "Test", 1 days, milestoneAmounts1, milestoneDescriptions1);
 
         assertEq(factory.getProjectCount(), 1);
         assertEq(factory.projects(0), donationAddress);
@@ -53,15 +57,9 @@ contract DonationFactoryTest is Test {
 
     function test_OwnerIsSetCorrectly() public {
 
-        address[] memory validators = new address[](1);
-        validators[0] = validator1;
-
-        uint16[] memory milestones = new uint16[](1);
-        milestones[0] = 10000;
-
         vm.prank(owner);
 
-        address donationAddress = factory.createDonation(5 ether, validators, "Project", 7 days, milestones);
+        address donationAddress = factory.createDonation( validators, "Project", 7 days, milestoneAmounts1, milestoneDescriptions1);
 
         Donation donation = Donation(donationAddress);
 
@@ -70,17 +68,16 @@ contract DonationFactoryTest is Test {
 
     function test_CreateMultipleDonations() public {
 
-        address[] memory validators = new address[](1);
-        validators[0] = validator1;
+        milestoneAmounts2[0] = 3000;
+        milestoneAmounts2[1] = 4000;
 
-        uint16[] memory milestones = new uint16[](1);
-        milestones[0] = 10000;
-
+        milestoneDescriptions2[0] = "milestone1";
+        milestoneDescriptions2[1] = "milestone2";
         vm.startPrank(owner);
 
-        factory.createDonation(1 ether, validators, "A", 1 days, milestones);
+        factory.createDonation( validators, "A", 1 days, milestoneAmounts1, milestoneDescriptions1);
 
-        factory.createDonation(2 ether, validators, "B", 1 days, milestones);
+        factory.createDonation( validators, "B", 1 days, milestoneAmounts2, milestoneDescriptions2);
 
         vm.stopPrank();
 

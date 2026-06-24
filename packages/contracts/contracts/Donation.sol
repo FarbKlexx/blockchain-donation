@@ -29,7 +29,8 @@ contract Donation{
     mapping(uint256 => mapping(address => bool)) hasVoted;
 
     struct Milestone{
-        uint16 percentage;
+        uint256 amount;
+        string description;
         uint16 approvedCount;
         uint16 rejectedCount;
         bool votingFinished;
@@ -89,18 +90,18 @@ contract Donation{
         FailureReason reason
     );
 
-    constructor(address owner, uint256 goal, address[] memory validators_, string memory description_, uint256 duration, uint16[] memory milestonePercentages){
-        require(goal > 0, "Donation goal must be positive");
+    constructor(address owner, address[] memory validators_, string memory description_, uint256 duration, uint256[] memory milestoneAmounts, string[] memory milestoneDescriptions){
         require(duration > 0, "Duration must be positive");
+        require(milestoneAmounts.length == milestoneDescriptions.length, "Milestone arrays not equally long"
+);
 
-        uint256 totalPercentage;
+        uint256 milestonesTotal;
 
-        for(uint i = 0; i < milestonePercentages.length; i++){
-            require(milestonePercentages[i] > 0, "Milestone percentage must be positive");
-            totalPercentage += milestonePercentages[i];
-            milestones.push(Milestone(milestonePercentages[i], 0, 0, false, false));
+        for(uint i = 0; i < milestoneAmounts.length; i++){
+            require(milestoneAmounts[i] > 0, "Milestone Goal must be positive");
+            milestonesTotal += milestoneAmounts[i];
+            milestones.push(Milestone(milestoneAmounts[i], milestoneDescriptions[i], 0, 0, false, false));
         }
-        require(totalPercentage == basepoints, "Milestones percent have to add up to 10000");
 
 
         for(uint i = 0; i < validators_.length; i++){
@@ -120,7 +121,7 @@ contract Donation{
         require(validators.length > 0, "Validator required");
 
 
-        donationGoal = goal;
+        donationGoal = milestonesTotal;
         description = description_;
         contractOwner = owner;
         start = block.timestamp;
@@ -191,7 +192,7 @@ contract Donation{
     function payout(uint milestoneIndex) external isOwner onlyDuringPayout() isMilestone(milestoneIndex) isCurrentMilestone(milestoneIndex) lastMilestoneApproved(currentMilestone){
         require(!milestones[milestoneIndex].paid, "This Milestone has already been paid");
         
-        uint256 milestonePayout = calculatePortion(totalDonations, milestones[milestoneIndex].percentage);
+        uint256 milestonePayout = milestones[milestoneIndex].amount;
         require(totalDonations >= milestonePayout, "Not enough funds for payout");
 
         milestones[milestoneIndex].paid = true;

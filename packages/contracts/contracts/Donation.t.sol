@@ -10,19 +10,27 @@ contract DonationTest is Test {
   Donation donation;
   address[] validators; 
   address owner;
-  uint16[] milestonePercentages;
+  uint256[] milestoneAmounts;
+  string[] milestoneDescriptions;
   string description = "This is a description";
   uint256 duration = 7 days;
-  uint256 donationGoal = 10 ether;
+  uint256 donationGoal;
 
   function setUp() public {
     validators.push(makeAddr("a"));
     validators.push(makeAddr("b"));
     owner = makeAddr("owner");
-    milestonePercentages.push(2400);
-    milestonePercentages.push(2600);
-    milestonePercentages.push(5000);
-    donation = new Donation(owner, donationGoal, validators, description, duration, milestonePercentages);
+    milestoneAmounts.push(2 ether);
+    milestoneAmounts.push(4 ether);
+    milestoneAmounts.push(4 ether);
+
+    donationGoal = milestoneAmounts[0] + milestoneAmounts[1] + milestoneAmounts[2];
+
+    milestoneDescriptions.push("description1");
+    milestoneDescriptions.push("description2");
+    milestoneDescriptions.push("description3");
+
+    donation = new Donation(owner, validators, description, duration, milestoneAmounts, milestoneDescriptions);
   }
 
   function test_InitialDonations() public view {
@@ -121,7 +129,7 @@ contract DonationTest is Test {
 
     uint256 currentMilestone = donation.currentMilestone();
 
-    for(uint256 i = 0; i < milestonePercentages.length - 1; i++){
+    for(uint256 i = 0; i < milestoneAmounts.length - 1; i++){
       vm.prank(owner);
       donation.payout(currentMilestone);
       for(uint256 j = 0; j < validators.length; j++){

@@ -14,9 +14,9 @@ contract DonationFactory {
         address donationContract
     );
 
-    function createDonation(uint256 goal, address[] calldata validators, string calldata description, uint256 duration, uint16[] calldata milestonePercentages) external returns (address) {
+    function createDonation(address[] calldata validators, string calldata description, uint256 duration, uint256[] calldata milestoneAmounts, string[] calldata milestoneDescriptions) external returns (address) {
 
-        Donation donation = new Donation(msg.sender, goal, validators, description, duration, milestonePercentages);
+        Donation donation = new Donation(msg.sender, validators, description, duration, milestoneAmounts, milestoneDescriptions);
 
         projects.push(address(donation));
         projectsPerOwner[msg.sender].push(address(donation));
