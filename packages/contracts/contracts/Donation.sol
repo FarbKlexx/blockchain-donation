@@ -32,6 +32,7 @@ contract Donation{
         uint16 percentage;
         uint16 approvedCount;
         uint16 rejectedCount;
+        bool votingFinished;
         bool paid;
     }
 
@@ -59,6 +60,11 @@ contract Donation{
 
     event VoteSubmitted(
         address indexed validator,
+        uint256 milestoneIndex,
+        bool approved
+    );
+
+    event MilestoneVotingFinished(
         uint256 milestoneIndex,
         bool approved
     );
@@ -92,7 +98,7 @@ contract Donation{
         for(uint i = 0; i < milestonePercentages.length; i++){
             require(milestonePercentages[i] > 0, "Milestone percentage must be positive");
             totalPercentage += milestonePercentages[i];
-            milestones.push(Milestone(milestonePercentages[i], 0, 0, false));
+            milestones.push(Milestone(milestonePercentages[i], 0, 0, false, false));
         }
         require(totalPercentage == basepoints, "Milestones percent have to add up to 10000");
 
@@ -123,7 +129,7 @@ contract Donation{
 
     } 
 
-    function donate() external payable isPositiveDonation(msg.value) onlyDuringFunding() isInTimeFrame() noOverpaying(msg.value) {
+    function donate() external payable isPositiveDonation(msg.value) onlyDuringFunding() isInProjectTimeFrame() noOverpaying(msg.value) {
         uint256 donation = msg.value;
         address donor = msg.sender;
 
@@ -142,10 +148,20 @@ contract Donation{
         }
     }
 
-    function voteMilestone(uint milestoneIndex, bool vote) external isAllowedToVote onlyDuringPayout() isMilestone(milestoneIndex) isLastMilestone(milestoneIndex) {
-        require(!hasVoted[milestoneIndex][msg.sender], "Validator has already voted");
+    function voteMilestone(uint milestoneIndex, bool vote) external isAllowedToVote onlyDuringPayout() isMilestone(milestoneIndex) isLastMilestone(milestoneIndex) MilestoneVotingOpen(milestoneIndex){
+        if(hasVoted[milestoneIndex][msg.sender] == true){
+            bool lastVote = votesForMilestone[milestoneIndex][msg.sender];
+            require(lastVote != vote, "Same Vote was already made");
 
-        hasVoted[milestoneIndex][msg.sender] = true;
+            if(lastVote){
+                milestones[milestoneIndex].approvedCount--;
+            } else {
+                milestones[milestoneIndex].rejectedCount--;
+            }
+        }
+        else{
+            hasVoted[milestoneIndex][msg.sender] = true;
+        }
         votesForMilestone[milestoneIndex][msg.sender] = vote;
 
         if (vote){
@@ -156,12 +172,19 @@ contract Donation{
 
         emit VoteSubmitted(msg.sender, milestoneIndex, vote);
 
-        if(calculatePercentageInBps(milestones[milestoneIndex].rejectedCount, validators.length) > basepoints-neededVoteMajorityInBps){
+        if(isMilestoneRejected(milestoneIndex)){
+            milestones[milestoneIndex].votingFinished = true;
+            emit MilestoneVotingFinished(milestoneIndex, false);
+
             Status oldStatus = currentStatus;
             currentStatus = Status.Failed;
             emit StatusChanged(oldStatus, currentStatus, FailureReason.RejectedByValidators);
 
             refundableBalance = address(this).balance;
+        }
+        else if(isMilestoneApproved(milestoneIndex)){
+            milestones[milestoneIndex].votingFinished = true;
+            emit MilestoneVotingFinished(milestoneIndex, true);
         }
     }
 
@@ -231,8 +254,8 @@ contract Donation{
         _;
     }
 
-    modifier isInTimeFrame(){
-        require(block.timestamp >= start && block.timestamp <= end, "not in timeframe");
+    modifier isInProjectTimeFrame(){
+        require(block.timestamp >= start && block.timestamp <= end, "not in time frame");
         _;
     }
 
@@ -270,7 +293,7 @@ contract Donation{
 
     modifier lastMilestoneApproved(uint256 milestoneIndex){
         if (milestoneIndex > 0){
-            require(calculatePercentageInBps(milestones[milestoneIndex-1].approvedCount, validators.length) >= neededVoteMajorityInBps, "Last Milestone is not yet approved");
+            require(isMilestoneApproved(milestoneIndex-1));
         }
         _;
     }
@@ -303,6 +326,11 @@ contract Donation{
     modifier isDonor() {
         require(donations[msg.sender] > 0, "Sender has not donated anything");
         _;
+    }
+
+    modifier MilestoneVotingOpen(uint256 milestoneIndex){
+        require(!milestones[milestoneIndex].votingFinished, "Milestone Voting has already finished");
+        _;  
     }
 
 
@@ -345,5 +373,13 @@ contract Donation{
     function calculatePercentageInBps(uint256 value, uint256 total)internal pure returns (uint256) {
         require(total > 0, "Total cannot be 0");
         return (value * basepoints) / total;
+    }
+
+    function isMilestoneApproved(uint256 milestoneIndex) internal view returns (bool) {
+        return calculatePercentageInBps(milestones[milestoneIndex].approvedCount, validators.length) >= neededVoteMajorityInBps;        
+    }
+
+    function isMilestoneRejected(uint256 milestoneIndex) internal view returns (bool) {
+        return calculatePercentageInBps(milestones[milestoneIndex].rejectedCount, validators.length) >= basepoints - neededVoteMajorityInBps;        
     }
 }
