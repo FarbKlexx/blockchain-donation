@@ -73,12 +73,10 @@ contract DonationFactoryTest is Test {
 
         milestoneDescriptions2[0] = "milestone1";
         milestoneDescriptions2[1] = "milestone2";
+
         vm.startPrank(owner);
-
         factory.createDonation( validators, "A", 1 days, milestoneAmounts1, milestoneDescriptions1);
-
         factory.createDonation( validators, "B", 1 days, milestoneAmounts2, milestoneDescriptions2);
-
         vm.stopPrank();
 
         assertEq(factory.getProjectCount(), 2);
