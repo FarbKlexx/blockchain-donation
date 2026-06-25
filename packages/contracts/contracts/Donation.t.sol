@@ -220,6 +220,41 @@ contract DonationTest is Test {
     donation.markAsFailedFunding();
   }
 
+  function test_MarkAsFailedDueToExpiredVoting() public {
+    donation.donate{value: donationGoal}();
+
+    uint256 milestoneIndex = donation.currentMilestone();
+    vm.prank(owner);
+    donation.payout(milestoneIndex);
+    
+    vm.warp(donation.milestoneVotingDeadline());
+    vm.expectEmit(false, false, false, true);
+    emit Donation.StatusChanged(Donation.Status.Payout, Donation.Status.Failed, Donation.FailureReason.ExpiredVoting);
+
+    donation.markAsFailedDueToExpiredVoting();
+    require(donation.currentStatus() == Donation.Status.Failed);
+  }
+
+  function test_MarkAsFailedDueToExpiredVotingWithinDeadline() public {
+    donation.donate{value: donationGoal}();
+
+    uint256 milestoneIndex = donation.currentMilestone();
+    vm.prank(owner);
+    donation.payout(milestoneIndex);
+
+    vm.warp(donation.milestoneVotingDeadline() - 1);
+
+    vm.expectRevert();
+    donation.markAsFailedDueToExpiredVoting();
+  }
+
+  function test_MarkAsFailedDueToExpiredVotingBeforePayout() public {
+    donation.donate{value: donationGoal -1}();
+
+    vm.expectRevert();
+    donation.markAsFailedDueToExpiredVoting();
+  }
+
   function test_EndByOwnerDuringFunding() public {
     vm.expectEmit(false, false, false, true);
     emit Donation.StatusChanged(Donation.Status.Funding, Donation.Status.Failed, Donation.FailureReason.EndedByOwner);

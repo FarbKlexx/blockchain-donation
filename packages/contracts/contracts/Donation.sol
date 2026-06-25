@@ -14,7 +14,7 @@ contract Donation{
 
     uint256 public refundableBalance;
 
-    //solidity has no decimal numbers, so we usebasepoints to represent percentages
+    //solidity has no decimal numbers, so we use basepoints to represent percentages
     uint256 constant basepoints = 10000;
 
     address[] public donors;
@@ -27,6 +27,9 @@ contract Donation{
     Milestone[] public milestones;
     mapping(uint256 => mapping(address => bool)) public votesForMilestone;
     mapping(uint256 => mapping(address => bool)) hasVoted;
+
+    uint256 public milestoneVotingDeadline;
+    uint256 constant milestoneVotingDuration = 182 days;
 
     struct Milestone{
         uint256 amount;
@@ -48,11 +51,12 @@ contract Donation{
     enum FailureReason{
         None,
         NoFunding,
+        ExpiredVoting,
         RejectedByValidators,
         EndedByOwner
     }
 
-    uint256 public neededVoteMajorityInBps = 6666;
+    uint256 constant neededVoteMajorityInBps = 6666;
 
     event DonationReceived(
         address indexed donor,
@@ -92,8 +96,7 @@ contract Donation{
 
     constructor(address owner, address[] memory validators_, string memory description_, uint256 duration, uint256[] memory milestoneAmounts, string[] memory milestoneDescriptions){
         require(duration > 0, "Duration must be positive");
-        require(milestoneAmounts.length == milestoneDescriptions.length, "Milestone arrays not equally long"
-);
+        require(milestoneAmounts.length == milestoneDescriptions.length, "Milestone arrays not equally long");
 
         uint256 milestonesTotal;
 
@@ -176,6 +179,7 @@ contract Donation{
         if(isMilestoneRejected(milestoneIndex)){
             milestones[milestoneIndex].votingFinished = true;
             emit MilestoneVotingFinished(milestoneIndex, false);
+            milestoneVotingDeadline = 0;
 
             Status oldStatus = currentStatus;
             currentStatus = Status.Failed;
@@ -186,6 +190,7 @@ contract Donation{
         else if(isMilestoneApproved(milestoneIndex)){
             milestones[milestoneIndex].votingFinished = true;
             emit MilestoneVotingFinished(milestoneIndex, true);
+            milestoneVotingDeadline = 0;
         }
     }
 
@@ -197,6 +202,8 @@ contract Donation{
 
         milestones[milestoneIndex].paid = true;
         totalPayout += milestonePayout;
+
+        milestoneVotingDeadline = block.timestamp + milestoneVotingDuration;
         
         if (currentMilestone < milestones.length - 1){
             currentMilestone++;
@@ -228,13 +235,25 @@ contract Donation{
     }
 
     function markAsFailedFunding() external onlyDuringFunding {
-        require(block.timestamp > end, "Funding duration is not over yet");
+        require(block.timestamp >= end, "Funding duration is not over yet");
         require(totalDonations < donationGoal, "The donation Goal has been reached");
 
         Status oldStatus = currentStatus;
         currentStatus = Status.Failed; 
 
         emit StatusChanged(oldStatus, currentStatus, FailureReason.NoFunding);
+
+        refundableBalance = address(this).balance;
+    }
+
+    function markAsFailedDueToExpiredVoting() external onlyDuringPayout MilestoneDeadlineIsSet() {
+        require(block.timestamp >= milestoneVotingDeadline, "Milestone Voting Duration has not been exceeded yet");
+        require(milestones[currentMilestone-1].paid, "This Milestone wasnt paid out yet");
+
+        Status oldStatus = currentStatus;
+        currentStatus = Status.Failed; 
+
+        emit StatusChanged(oldStatus, currentStatus, FailureReason.ExpiredVoting);
 
         refundableBalance = address(this).balance;
     }
@@ -331,7 +350,13 @@ contract Donation{
 
     modifier MilestoneVotingOpen(uint256 milestoneIndex){
         require(!milestones[milestoneIndex].votingFinished, "Milestone Voting has already finished");
+        require(milestoneVotingDeadline > block.timestamp, "Milestone Voting Deadline exceeded");
         _;  
+    }
+
+    modifier MilestoneDeadlineIsSet() {
+        require(milestoneVotingDeadline > 0, "Currently No Deadline is active");
+        _;
     }
 
 
@@ -385,6 +410,6 @@ contract Donation{
     }
 
     function isMilestoneRejected(uint256 milestoneIndex) internal view returns (bool) {
-        return calculatePercentageInBps(milestones[milestoneIndex].rejectedCount, validators.length) >= basepoints - neededVoteMajorityInBps;        
+        return calculatePercentageInBps(milestones[milestoneIndex].rejectedCount, validators.length) > basepoints - neededVoteMajorityInBps;        
     }
 }
