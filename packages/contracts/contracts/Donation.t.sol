@@ -127,7 +127,7 @@ contract DonationTest is Test {
     require(donation.currentStatus() == Donation.Status.Payout);
 
 
-    uint256 currentMilestone = donation.currentMilestone();
+    uint256 currentMilestone = donation.currentMilestoneIndex();
 
     for(uint256 i = 0; i < milestoneAmounts.length - 1; i++){
       vm.prank(owner);
@@ -136,7 +136,7 @@ contract DonationTest is Test {
         vm.prank(validators[j]);
         donation.voteMilestone(currentMilestone, true);
       }
-      currentMilestone = donation.currentMilestone();
+      currentMilestone = donation.currentMilestoneIndex();
     }
 
     vm.prank(owner);
@@ -147,7 +147,7 @@ contract DonationTest is Test {
 
   function test_VoteByValidator() public {
     donation.donate{value: donationGoal}();
-    uint256 milestoneIndex = donation.currentMilestone();
+    uint256 milestoneIndex = donation.currentMilestoneIndex();
     bool vote = true;
     address validator = validators[0];
 
@@ -165,7 +165,7 @@ contract DonationTest is Test {
 
   function test_VoteByNonValidator() public {
     donation.donate{value: donationGoal}();
-    uint256 milestoneIndex = donation.currentMilestone();
+    uint256 milestoneIndex = donation.currentMilestoneIndex();
 
     vm.prank(makeAddr("nonValidator"));
     vm.expectRevert();
@@ -174,7 +174,7 @@ contract DonationTest is Test {
 
   function test_VoteByValidatorWrongMilestone() public {
     donation.donate{value: donationGoal}();
-    uint256 milestoneIndex = donation.currentMilestone();
+    uint256 milestoneIndex = donation.currentMilestoneIndex();
 
     vm.prank(validators[0]);
     vm.expectRevert();
@@ -184,7 +184,7 @@ contract DonationTest is Test {
   function test_VoteByValidatorMakesProjectFailed() public {
     donation.donate{value: donationGoal}();
 
-    uint256 milestoneIndex = donation.currentMilestone();
+    uint256 milestoneIndex = donation.currentMilestoneIndex();
     bool vote = false;
     address validator = validators[0];
 
@@ -223,10 +223,10 @@ contract DonationTest is Test {
   function test_MarkAsFailedDueToExpiredVoting() public {
     donation.donate{value: donationGoal}();
 
-    uint256 milestoneIndex = donation.currentMilestone();
+    uint256 milestoneIndex = donation.currentMilestoneIndex();
     vm.prank(owner);
     donation.payout(milestoneIndex);
-    
+
     vm.warp(donation.milestoneVotingDeadline());
     vm.expectEmit(false, false, false, true);
     emit Donation.StatusChanged(Donation.Status.Payout, Donation.Status.Failed, Donation.FailureReason.ExpiredVoting);
@@ -238,7 +238,7 @@ contract DonationTest is Test {
   function test_MarkAsFailedDueToExpiredVotingWithinDeadline() public {
     donation.donate{value: donationGoal}();
 
-    uint256 milestoneIndex = donation.currentMilestone();
+    uint256 milestoneIndex = donation.currentMilestoneIndex();
     vm.prank(owner);
     donation.payout(milestoneIndex);
 

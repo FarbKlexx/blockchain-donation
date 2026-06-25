@@ -1,34 +1,49 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
+/** @title A contract for a donation project with milestones.
+ *  @notice This contract manages a crowdfunding system in which milestones are defined that can only paid out after validators approve the previous milestone.
+ */
 contract Donation{
 
     address public contractOwner;
     uint256 public donationGoal;
+    ///stores total donations that where made
     uint256 public totalDonations;
+    ///descripion of the project
     string public description;
+    ///start date of the project
     uint256 public start;
+    ///end date of the project
     uint256 public end;
 
+    ///The amount that das already been paid out
     uint256 public totalPayout;
 
+    ///The amount that can be refunded, set at time of project failure
     uint256 public refundableBalance;
 
-    //solidity has no decimal numbers, so we use basepoints to represent percentages
+    ///solidity has no decimal numbers, so we use basepoints to represent percentages
     uint256 constant basepoints = 10000;
 
     address[] public donors;
+    ///stores the total donations per donor
     mapping(address => uint256) public donations;
 
     address[] public validators;
+    ///makes check whether adress is a validator cheap and fast
     mapping(address => bool) public isValidator;
 
-    uint256 public currentMilestone;
+    ///The Milestone taht will be paid out next
+    uint256 public currentMilestoneIndex;
     Milestone[] public milestones;
+
     mapping(uint256 => mapping(address => bool)) public votesForMilestone;
     mapping(uint256 => mapping(address => bool)) hasVoted;
 
+    ///set whenever a milestone is paid out so that validators can vote until the deadline
     uint256 public milestoneVotingDeadline;
+    ///standard duration for how long can be voted after a milestone is paid out
     uint256 constant milestoneVotingDuration = 182 days;
 
     struct Milestone{
@@ -39,8 +54,10 @@ contract Donation{
         bool votingFinished;
         bool paid;
     }
-
+    ///Status in which the project is currently
     Status public currentStatus;
+
+    ///The Statius the project can be in
     enum Status{
         Funding,
         Payout,
@@ -48,6 +65,7 @@ contract Donation{
         Closed
     }
 
+    ///Reasons for project failure
     enum FailureReason{
         None,
         NoFunding,
@@ -56,6 +74,7 @@ contract Donation{
         EndedByOwner
     }
 
+    ///defines the needed majority vor a validated milestone, the complement is needed to block a milestone
     uint256 constant neededVoteMajorityInBps = 6666;
 
     event DonationReceived(
@@ -133,6 +152,7 @@ contract Donation{
 
     } 
 
+    ///Used to donate money to the project during the funding phase. When the goal is reached, it automatically changes the Status to Payout.
     function donate() external payable isPositiveDonation(msg.value) onlyDuringFunding() isInProjectTimeFrame() noOverpaying(msg.value) {
         uint256 donation = msg.value;
         address donor = msg.sender;
@@ -152,6 +172,9 @@ contract Donation{
         }
     }
 
+    ///Can be called by validators to vote on the last milestone that was paid out in order to enable the payout of the next milestone.
+    ///If the necessary portion of validators vote against the milestone, the project fails.
+    ///Can be called as long as the poll has not been decided. 
     function voteMilestone(uint milestoneIndex, bool vote) external isAllowedToVote onlyDuringPayout() isMilestone(milestoneIndex) isLastMilestone(milestoneIndex) MilestoneVotingOpen(milestoneIndex){
         if(hasVoted[milestoneIndex][msg.sender] == true){
             bool lastVote = votesForMilestone[milestoneIndex][msg.sender];
@@ -194,7 +217,9 @@ contract Donation{
         }
     }
 
-    function payout(uint milestoneIndex) external isOwner onlyDuringPayout() isMilestone(milestoneIndex) isCurrentMilestone(milestoneIndex) lastMilestoneApproved(currentMilestone){
+    ///Can be called by the owner after funding to pay out the money for the next milestone when the last milestone has been approved.
+    ///When the last milestone is paid out, the Project is closed. 
+    function payout(uint milestoneIndex) external isOwner onlyDuringPayout() isMilestone(milestoneIndex) isCurrentMilestone(milestoneIndex) lastMilestoneApproved(currentMilestoneIndex){
         require(!milestones[milestoneIndex].paid, "This Milestone has already been paid");
         
         uint256 milestonePayout = milestones[milestoneIndex].amount;
@@ -205,8 +230,8 @@ contract Donation{
 
         milestoneVotingDeadline = block.timestamp + milestoneVotingDuration;
         
-        if (currentMilestone < milestones.length - 1){
-            currentMilestone++;
+        if (currentMilestoneIndex < milestones.length - 1){
+            currentMilestoneIndex++;
         }else{
             Status oldStatus = currentStatus;
             currentStatus = Status.Closed;
@@ -218,11 +243,14 @@ contract Donation{
         require(success, "Last Payout failed");
     }
 
+    ///Can be called by the owner to pay out any rest amount of money that is in the contract after all milestones have been payid out.
     function payoutRest() external isOwner onlyWhenClosed {
         (bool success, ) = payable(contractOwner).call{value: address(this).balance}("");
         require(success, "Rest Payout failed");
     }
 
+    ///Can be called by donors to get their money back in case the project failed. 
+    ///The refund is proportional to what the donor donated towards the goal and the money that was left at time of failure. 
     function refund() external onlyWhenFailed isDonor {
         uint256 refundAmount = (donations[msg.sender] * refundableBalance) / totalDonations;
         donations[msg.sender] = 0;
@@ -234,6 +262,7 @@ contract Donation{
 
     }
 
+    ///Marks the project as failed when the project was not funded at the end of the funding campaign.
     function markAsFailedFunding() external onlyDuringFunding {
         require(block.timestamp >= end, "Funding duration is not over yet");
         require(totalDonations < donationGoal, "The donation Goal has been reached");
@@ -246,9 +275,10 @@ contract Donation{
         refundableBalance = address(this).balance;
     }
 
+    ///Marks the project as failed when the validators did not approve the last milestone within the deadline.
     function markAsFailedDueToExpiredVoting() external onlyDuringPayout MilestoneDeadlineIsSet() {
         require(block.timestamp >= milestoneVotingDeadline, "Milestone Voting Duration has not been exceeded yet");
-        require(milestones[currentMilestone-1].paid, "This Milestone wasnt paid out yet");
+        require(milestones[currentMilestoneIndex-1].paid, "This Milestone wasnt paid out yet");
 
         Status oldStatus = currentStatus;
         currentStatus = Status.Failed; 
@@ -258,6 +288,7 @@ contract Donation{
         refundableBalance = address(this).balance;
     }
 
+    ///Can be called by the owner to fail the project to enable refunds as soon as it is clear they will not be able to keep working and succeed on the project.
     function endByOwner() external isOwner{
         require(currentStatus == Status.Funding || currentStatus == Status.Payout, "failure by owner only pssible in funding or payout phase");
         
@@ -301,13 +332,13 @@ contract Donation{
 
 
     modifier isCurrentMilestone(uint256 milestoneIndex){
-        require(milestoneIndex == currentMilestone, "Chosen Milestone is not the current Milestone");
+        require(milestoneIndex == currentMilestoneIndex, "Chosen Milestone is not the current Milestone");
         _;
     }
 
     modifier isLastMilestone(uint256 milestoneIndex){
-        require(currentMilestone > 0, "The first milestone has no predecessor");
-        require(milestoneIndex == currentMilestone - 1, "Chosen Milestone is not the last Milestone");
+        require(currentMilestoneIndex > 0, "The first milestone has no predecessor");
+        require(milestoneIndex == currentMilestoneIndex - 1, "Chosen Milestone is not the last Milestone");
         _;
     }
 
@@ -392,23 +423,19 @@ contract Donation{
         return milestones.length;
     }
 
-
-    //no decimal numbers so we need basepoints
-    //basepoints is 100%
-    //if basepoints = 10000, then 1% = 100bps
-    function calculatePortion(uint256 value, uint256 bsp)internal pure returns (uint256) {
-        return (value * bsp) / basepoints;
-    }
-
+    ///Calculates the percentage of the value to the total and returns it in Bps.
+    ///Basepoints are used since solidity does not allow decimal numbers.
     function calculatePercentageInBps(uint256 value, uint256 total)internal pure returns (uint256) {
         require(total > 0, "Total cannot be 0");
         return (value * basepoints) / total;
     }
 
+    ///Returns whether the Milestone has been approved.
     function isMilestoneApproved(uint256 milestoneIndex) internal view returns (bool) {
         return calculatePercentageInBps(milestones[milestoneIndex].approvedCount, validators.length) >= neededVoteMajorityInBps;        
     }
 
+    ///Returns whether the Milestone has been rejected.
     function isMilestoneRejected(uint256 milestoneIndex) internal view returns (bool) {
         return calculatePercentageInBps(milestones[milestoneIndex].rejectedCount, validators.length) > basepoints - neededVoteMajorityInBps;        
     }
