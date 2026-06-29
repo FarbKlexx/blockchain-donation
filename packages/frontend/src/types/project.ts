@@ -25,12 +25,15 @@ export interface Milestone {
   /** Funds allocated to this milestone, in the project currency. */
   allocated: number
   status: MilestoneStatus
-  /** How many validators have approved this milestone so far (`approvedCount`). */
+  /** Validators who have approved THIS milestone so far (`approvedCount`). In the
+   *  contract their approval is what releases the NEXT milestone's payout. */
   confirmations: number
   /** Size of the validator set (denominator for the confirmation display). */
   totalValidators: number
-  /** Approvals needed to release funds — a 66.66% majority of the validator set,
-   *  derived from the contract's `neededVoteMajorityInBps` (NOT every validator). */
+  /** Approvals needed to release the next milestone — a 66.66% majority of the
+   *  validator set. The contract's `neededVoteMajorityInBps` is a non-public
+   *  constant (no getter), so the frontend mirrors the literal (NOT every
+   *  validator). */
   requiredApprovals: number
 }
 

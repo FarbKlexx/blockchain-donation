@@ -70,20 +70,34 @@ const avatars = computed(() =>
         <span class="ms__funds-label">Zugeordnete Mittel</span>
         <span class="ms__funds-value">{{ formatAmount(milestone.allocated) }} {{ currency }}</span>
       </div>
-      <!-- Validator confirmations are only shown once voting has opened
-           (funding goal reached). Before that, the milestone is locked. -->
-      <div v-if="votingOpen" class="ms__confirm">
-        <div class="ms__avatars">
-          <span v-for="(a, i) in avatars" :key="i" class="ms__avatar" :title="a.address">
-            <span class="ms__avatar-img" :style="{ background: a.gradient }" />
-            <span v-if="a.confirmed" class="ms__check"><AppIcon name="check" :size="8" /></span>
+      <!-- The confirmation/voting area mirrors the contract lifecycle and is only
+           meaningful once the funding goal is reached (votingOpen). -->
+      <template v-if="votingOpen">
+        <!-- Funds released — a completed milestone is not re-voted. -->
+        <div v-if="milestone.status === 'completed'" class="ms__released">
+          <AppIcon name="check" :size="14" />
+          <span>Freigegeben</span>
+        </div>
+        <!-- Validators are voting on this milestone right now; their approval
+             releases the next milestone. -->
+        <div v-else-if="milestone.status === 'in_progress'" class="ms__confirm">
+          <div class="ms__avatars">
+            <span v-for="(a, i) in avatars" :key="i" class="ms__avatar" :title="a.address">
+              <span class="ms__avatar-img" :style="{ background: a.gradient }" />
+              <span v-if="a.confirmed" class="ms__check"><AppIcon name="check" :size="8" /></span>
+            </span>
+          </div>
+          <span class="ms__confirm-text">
+            {{ milestone.confirmations }}/{{ milestone.totalValidators }} bestätigt
+            · {{ milestone.requiredApprovals }} für Freigabe nötig
           </span>
         </div>
-        <span class="ms__confirm-text">
-          {{ milestone.confirmations }}/{{ milestone.totalValidators }} bestätigt
-          · {{ milestone.requiredApprovals }} für Freigabe nötig
-        </span>
-      </div>
+        <!-- Not yet up for a vote — a previous milestone must be released first. -->
+        <div v-else class="ms__locked">
+          <AppIcon name="lock" :size="14" />
+          <span>Noch nicht zur Abstimmung freigegeben</span>
+        </div>
+      </template>
       <div v-else class="ms__locked">
         <AppIcon name="lock" :size="14" />
         <span>Abstimmung startet nach Zielerreichung</span>
@@ -298,6 +312,15 @@ const avatars = computed(() =>
   gap: 6px;
   font-size: 12px;
   color: var(--bd-grey-text);
+}
+
+.ms__released {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--bd-green);
 }
 
 /* Validator voting */

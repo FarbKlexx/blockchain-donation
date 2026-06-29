@@ -3,6 +3,7 @@ import { computed, reactive, ref } from 'vue'
 import { createProject, type CreateProjectPayload } from '@/services/projectsService'
 import { useWalletStore } from '@/stores/wallet'
 import { NATIVE_CURRENCY, NATIVE_DECIMALS, validateAmount } from '@/utils/amount'
+import { formatAmount } from '@/utils/format'
 import { shortenAddress } from '@/utils/address'
 import AppIcon from '@/components/ui/AppIcon.vue'
 
@@ -25,12 +26,12 @@ const form = reactive({
   description: [''],
   news: [] as { date: string; title: string; body: string; images: string[] }[],
   // ── Smart contract ──
-  goal: '',
   durationDays: '',
   onchainDescription: '',
   validators: [''],
-  // percentage is %, converted to basis points on submit
-  milestones: [{ percent: '', title: '', description: '' }],
+  // Each milestone carries an absolute funding amount (native coin). The funding
+  // goal is their sum — the contract has no separate goal input.
+  milestones: [{ amount: '', title: '', description: '' }],
 })
 
 const attempted = ref(false)
@@ -40,26 +41,23 @@ const created = ref<{ address: string } | null>(null)
 // Entirely-blank milestone rows (no %, title, or description) are ignored — like
 // the description/news lists — so a leftover empty row never blocks submit.
 const filledMilestones = computed(() =>
-  form.milestones.filter((m) => m.percent.trim() || m.title.trim() || m.description.trim()),
+  form.milestones.filter((m) => m.amount.trim() || m.title.trim() || m.description.trim()),
 )
-// Milestone percentages → basis points; the contract requires the sum == 10000.
-// (Percentages are restricted to ≤2 decimals below, so this rounding is exact.)
-const milestoneBps = computed(() =>
-  filledMilestones.value.map((m) => {
-    const n = Number(m.percent)
-    return Number.isFinite(n) && n > 0 ? Math.round(n * 100) : 0
-  }),
+// Each milestone's amount as a validated decimal string (native coin). The
+// funding goal is the SUM of these — the contract derives the goal from the
+// milestone amounts; there is no separate goal input.
+const milestoneAmountChecks = computed(() =>
+  filledMilestones.value.map((m) => validateAmount(m.amount, NATIVE_DECIMALS)),
 )
-const totalBps = computed(() => milestoneBps.value.reduce((s, b) => s + b, 0))
+const goalTotal = computed(() =>
+  milestoneAmountChecks.value.reduce((sum, c) => (c.ok ? sum + Number(c.value) : sum), 0),
+)
 
 const filledValidators = computed(() => form.validators.map((v) => v.trim()).filter(Boolean))
 
 const errors = computed(() => {
   const e: string[] = []
   if (!form.title.trim()) e.push('Titel ist erforderlich.')
-
-  const goalCheck = validateAmount(form.goal, NATIVE_DECIMALS)
-  if (!goalCheck.ok) e.push(`Finanzierungsziel: ${goalCheck.error}`)
 
   const days = Number(form.durationDays)
   if (!Number.isInteger(days) || days <= 0) e.push('Laufzeit muss eine ganze Zahl an Tagen > 0 sein.')
@@ -75,16 +73,13 @@ const errors = computed(() => {
   if (wallet.address && lower.includes(wallet.address.toLowerCase()))
     e.push('Du selbst (Ersteller) kannst kein Validator sein.')
 
-  // Milestones (blank rows ignored): ≥1, each a positive % with ≤2 decimals and
-  // a title, summing to exactly 100%.
+  // Milestones (blank rows ignored): ≥1, each with a positive native-coin amount
+  // and a title. The funding goal is the sum of the amounts (no separate goal).
   const ms = filledMilestones.value
   if (ms.length === 0) e.push('Mindestens ein Meilenstein ist erforderlich.')
-  if (ms.some((m) => m.percent.trim() && !/^\d+(\.\d{1,2})?$/.test(m.percent.trim())))
-    e.push('Meilenstein-Anteile dürfen höchstens 2 Nachkommastellen haben.')
-  if (milestoneBps.value.some((b) => b <= 0)) e.push('Jeder Meilenstein braucht einen Anteil > 0 %.')
+  if (milestoneAmountChecks.value.some((c) => !c.ok))
+    e.push(`Jeder Meilenstein braucht einen gültigen Betrag in ${NATIVE_CURRENCY} (> 0).`)
   if (ms.some((m) => !m.title.trim())) e.push('Jeder Meilenstein braucht einen Titel.')
-  if (totalBps.value !== 10000)
-    e.push(`Die Meilenstein-Anteile müssen exakt 100 % ergeben (aktuell ${totalBps.value / 100} %).`)
 
   return e
 })
@@ -104,7 +99,7 @@ function removeValidator(i: number) {
   form.validators.splice(i, 1)
 }
 function addMilestone() {
-  form.milestones.push({ percent: '', title: '', description: '' })
+  form.milestones.push({ amount: '', title: '', description: '' })
 }
 function removeMilestone(i: number) {
   form.milestones.splice(i, 1)
@@ -137,14 +132,13 @@ async function submit() {
   submitting.value = true
   created.value = null
   try {
-    const goalCheck = validateAmount(form.goal, NATIVE_DECIMALS)
     const payload: CreateProjectPayload = {
       contract: {
-        goal: goalCheck.ok ? goalCheck.value : form.goal,
         durationSeconds: Number(form.durationDays) * 86400,
         description: form.onchainDescription.trim(),
         validators: filledValidators.value,
-        milestonePercentagesBps: milestoneBps.value,
+        // Validated decimal strings (native coin); the goal is their sum.
+        milestoneAmounts: milestoneAmountChecks.value.map((c) => (c.ok ? c.value : '0')),
       },
       metadata: {
         title: form.title.trim(),
@@ -252,13 +246,14 @@ async function submit() {
         </p>
         <div class="field__row">
           <label class="field">
-            <span class="field__label">Finanzierungsziel ({{ NATIVE_CURRENCY }}) *</span>
-            <input v-model="form.goal" class="field__input" type="text" inputmode="decimal" placeholder="z. B. 50000" />
-          </label>
-          <label class="field">
             <span class="field__label">Laufzeit (Tage) *</span>
             <input v-model="form.durationDays" class="field__input" type="number" min="1" step="1" />
           </label>
+          <div class="field">
+            <span class="field__label">Finanzierungsziel ({{ NATIVE_CURRENCY }})</span>
+            <output class="field__readonly">{{ formatAmount(goalTotal) }} {{ NATIVE_CURRENCY }}</output>
+            <span class="field__hint">Ergibt sich automatisch aus der Summe der Meilensteinbeträge.</span>
+          </div>
         </div>
         <label class="field">
           <span class="field__label">On-Chain-Beschreibung</span>
@@ -286,17 +281,17 @@ async function submit() {
       <section class="card">
         <div class="card__head">
           <h2 class="card__title">Meilensteine</h2>
-          <span class="total" :class="{ 'total--ok': totalBps === 10000 }">Summe {{ totalBps / 100 }} % / 100 %</span>
+          <span class="total">Summe {{ formatAmount(goalTotal) }} {{ NATIVE_CURRENCY }}</span>
         </div>
         <p class="card__hint">
-          Anteil (%) wird im Vertrag gespeichert (Summe muss 100 % sein); Titel & Beschreibung im
-          Backend.
+          Betrag wird im Vertrag gespeichert (Finanzierungsziel = Summe der Beträge); Titel &
+          Beschreibung im Backend.
         </p>
         <div v-for="(m, i) in form.milestones" :key="i" class="ms-create">
           <div class="field__row">
-            <label class="field field--pct">
-              <span class="field__label">Anteil %</span>
-              <input v-model="m.percent" class="field__input" type="number" min="0" step="0.01" />
+            <label class="field field--amount">
+              <span class="field__label">Betrag ({{ NATIVE_CURRENCY }})</span>
+              <input v-model="m.amount" class="field__input" type="text" inputmode="decimal" placeholder="z. B. 5000" />
             </label>
             <label class="field">
               <span class="field__label">Titel</span>
@@ -489,9 +484,6 @@ async function submit() {
   font-weight: 700;
   color: var(--bd-grey-text);
 }
-.total--ok {
-  color: var(--bd-green);
-}
 
 /* Fields (shared shape with the edit view) */
 .field {
@@ -511,8 +503,8 @@ async function submit() {
 .field--date {
   flex: 0 0 170px;
 }
-.field--pct {
-  flex: 0 0 120px;
+.field--amount {
+  flex: 0 0 150px;
 }
 
 .field__row {
@@ -552,6 +544,13 @@ async function submit() {
 
 .field__input--mono {
   font-family: var(--bd-font-stats, monospace);
+}
+
+.field__readonly {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--bd-black);
+  padding: 8px 0 2px;
 }
 
 .ms-create,

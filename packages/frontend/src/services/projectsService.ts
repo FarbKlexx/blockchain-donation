@@ -41,9 +41,10 @@ function delay<T>(value: T, ms = 250): Promise<T> {
 
 // ── SOURCE 1: smart contract (ethers.js) ────────────────────────────────────
 // TODO(integration): replace these with ethers reads. The campaign list is
-// `DonationFactory.getDonations()` (an address[]); per campaign, read the
-// `Donation` getters (donationGoal/totalDonations/start/end/currentStatus/
-// validators/milestones/...). Campaigns are keyed by their contract address.
+// `DonationFactory.getProjects()` (an address[]); per campaign, read the
+// `Donation` getters (donationGoal/totalDonations/getDonors()/start/end/
+// currentStatus/currentMilestoneIndex/getValidators()/getMilestones()/...).
+// Campaigns are keyed by their contract address.
 
 async function fetchCampaigns(): Promise<ContractCampaign[]> {
   return delay(campaigns)
@@ -119,8 +120,14 @@ export async function loadAccountSession(address: string): Promise<AccountSessio
 
 // ── Derivations: raw on-chain fields → the UI model ──────────────────────────
 // The contract stores only primitives; everything the UI shows that looks
-// "computed" (days left, milestone amounts, milestone/project status, the
-// confirmation threshold) is derived here, once, at the merge seam.
+// "computed" (days left, milestone/project status, the confirmation threshold)
+// is derived here, once, at the merge seam.
+
+// The release threshold: a 66.66% majority of the validator set. This mirrors
+// the contract's `neededVoteMajorityInBps` — which is a non-public `constant`
+// (no getter), so it cannot be read on-chain; the literal here IS the contract's
+// single source of truth for the frontend.
+const NEEDED_VOTE_MAJORITY_BPS = 6666
 
 /** UI status (laufend/abgelaufen) from the on-chain `Status` enum + `end`.
  *  Funding (within time) and Payout are active; a Funding campaign past its end
@@ -131,31 +138,29 @@ function deriveProjectStatus(c: ContractCampaign): ProjectStatus {
   return 'laufend'
 }
 
-/** Approvals needed to release a milestone: the smallest integer count that
- *  meets the on-chain majority `approvedCount/validators.length >= bps/10000`. */
+/** Approvals needed to release the NEXT milestone: the smallest integer count
+ *  that meets the majority `approvedCount/validators.length >= bps/10000`. */
 function requiredApprovals(validatorCount: number, majorityBps: number): number {
   if (validatorCount <= 0) return 0
   return Math.ceil((validatorCount * majorityBps) / 10000)
 }
 
-/** Absolute funds for a milestone: its basis-point share of the goal. On-chain
- *  the payout is `totalDonations * percentage / 10000`; since donations cap at
- *  the goal, the planned allocation against the goal is shown here. */
-function milestoneAllocated(percentageBps: number, goal: number): number {
-  return Math.round((goal * percentageBps) / 10000)
-}
-
-/** Milestone presentation status, derived from the struct + lifecycle. Only the
- *  current milestone, while the project is in Payout with voting opened, is
- *  "in_progress"; a paid milestone is "completed"; everything else "pending". */
+/** Milestone presentation status, derived from the struct + lifecycle. Milestone
+ *  funds are absolute on-chain (`amount`), so there is no allocation maths.
+ *  Per the contract's voting model, the milestone validators are CURRENTLY
+ *  voting on is the just-paid one (`currentMilestoneIndex - 1`), whose vote is
+ *  not yet finished while the project is in Payout — that one is "in_progress".
+ *  Any other paid milestone has its funds released → "completed"; an unpaid
+ *  milestone is "pending". */
 function deriveMilestoneStatus(
   ms: ContractCampaign['milestones'][number],
   index: number,
   c: ContractCampaign,
 ): MilestoneStatus {
-  if (ms.paid) return 'completed'
-  if (c.currentStatus === 'Payout' && index === c.currentMilestone && ms.readyToBeApproved) {
-    return 'in_progress'
+  if (ms.paid) {
+    const beingVotedOn =
+      c.currentStatus === 'Payout' && index === c.currentMilestoneIndex - 1 && !ms.votingFinished
+    return beingVotedOn ? 'in_progress' : 'completed'
   }
   return 'pending'
 }
@@ -175,7 +180,7 @@ function toFunding(c: ContractCampaign): Funding {
 }
 
 function mergeProject(c: ContractCampaign, m: ProjectMetadata): Project {
-  const required = requiredApprovals(c.validators.length, c.neededVoteMajorityInBps)
+  const required = requiredApprovals(c.validators.length, NEEDED_VOTE_MAJORITY_BPS)
 
   return {
     // Route id is the human slug (metadata); the on-chain identity is `address`.
@@ -214,7 +219,8 @@ function mergeProject(c: ContractCampaign, m: ProjectMetadata): Project {
       const meta = m.milestones[i]
       return {
         index: String(i + 1).padStart(2, '0'),
-        allocated: milestoneAllocated(ms.percentage, c.donationGoal),
+        // Milestone funds are absolute on-chain — no share-of-goal maths.
+        allocated: ms.amount,
         status: deriveMilestoneStatus(ms, i, c),
         confirmations: ms.approvedCount,
         totalValidators: c.validators.length,
@@ -372,18 +378,20 @@ export interface VoteResult {
 }
 
 /**
- * Cast a validator's vote on a project's CURRENT milestone (approve = true,
- * reject = false). Validator-only, and only while that milestone is open for
- * voting — the contract enforces all preconditions (isValidator, Payout phase,
- * readyToBeApproved, current milestone, not-yet-voted); the UI mirrors them.
+ * Cast a validator's vote on the milestone currently up for a vote — the
+ * just-paid one, `currentMilestoneIndex - 1` (approve = true, reject = false).
+ * Approving it is what releases the NEXT milestone's payout. Validator-only and
+ * only while voting is open — the contract enforces every precondition
+ * (isValidator, Payout phase, milestone == currentMilestoneIndex - 1, voting not
+ * finished, deadline not passed, no duplicate vote); the UI only mirrors them.
  *
  * TODO(integration): the real write —
  *   const donation = Donation__factory.connect(projectAddress, signer)
  *   await (await donation.voteMilestone(milestoneIndex, approve)).wait()
- * then RE-READ that milestone (approvedCount/rejectedCount/paid) and the
- * project's currentStatus from chain — a single approval can flip the project to
- * Failed or advance the milestone. The contract is the authority; the frontend
- * validator check is UX only.
+ * then RE-READ that milestone (approvedCount/rejectedCount/votingFinished) and
+ * the project's currentStatus from chain — a single approval can flip the
+ * project to Failed or unlock the next payout. The contract is the authority;
+ * the frontend validator check is UX only.
  *
  * [mock] Placeholder: no transaction is sent and no state is mutated.
  */
@@ -451,16 +459,16 @@ export async function updateProjectMetadata(
  *  `metadata` → the backend, keyed by the new contract address once known. */
 export interface CreateProjectPayload {
   contract: {
-    /** Funding goal as a validated decimal STRING (native coin) → parseEther. */
-    goal: string
     /** Campaign length in seconds (`duration`). */
     durationSeconds: number
     /** On-chain description (set once at creation, then immutable). */
     description: string
     /** Validator addresses — distinct, non-empty, none equal to the creator. */
     validators: string[]
-    /** Milestone shares in basis points; must sum to 10000. */
-    milestonePercentagesBps: number[]
+    /** Per-milestone funding amounts as validated decimal STRINGS (native coin)
+     *  → parseEther each. The funding goal is their SUM — the contract derives it
+     *  from these; there is no separate goal field. At least one, each > 0. */
+    milestoneAmounts: string[]
   }
   metadata: {
     title: string
@@ -468,7 +476,7 @@ export interface CreateProjectPayload {
     category: string
     image: string
     description: string[]
-    /** Milestone display texts, in the same order as the percentages above. */
+    /** Milestone display texts, in the same order as the amounts above. */
     milestones: { title: string; description: string }[]
     news: { date: string; title: string; body: string; images: string[] }[]
   }
@@ -490,11 +498,13 @@ export interface CreateProjectResult {
  *   // 1) on-chain — owner = msg.sender (the connected signer):
  *   const factory = DonationFactory__factory.connect(VITE_FACTORY_ADDRESS, signer)
  *   const tx = await factory.createDonation(
- *     parseEther(payload.contract.goal),
  *     payload.contract.validators,
  *     payload.contract.description,
  *     payload.contract.durationSeconds,
- *     payload.contract.milestonePercentagesBps,
+ *     payload.contract.milestoneAmounts.map((a) => parseEther(a)),
+ *     // on-chain milestone descriptions stay empty — display text is off-chain;
+ *     // the contract only needs the array length to match milestoneAmounts:
+ *     payload.contract.milestoneAmounts.map(() => ''),
  *   )
  *   const receipt = await tx.wait()
  *   const address = <read the DonationContractCreated event from receipt>

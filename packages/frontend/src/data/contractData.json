@@ -1,5 +1,5 @@
 {
-  "_comment": "MOCK of SOURCE 1: the on-chain state, shaped exactly like the Donation / DonationFactory contracts (branch contractDonation). The frontend reads these via ethers.js: the campaign list = DonationFactory.getDonations() (address[]); per campaign the Donation getters (donationGoal, totalDonations, start, end, currentStatus, currentMilestone, validators, milestones, neededVoteMajorityInBps, ...). Amounts are the chain's NATIVE coin (donate() takes msg.value; no ERC-20 token). Joined to projectMetadata.json by `address` (the unique project id). Only raw on-chain values live here — anything the UI shows that looks computed is DERIVED in projectsService: 'days left'/'time left' from `end`; milestone absolute amounts from `percentage`*goal; milestone 'status' from paid/readyToBeApproved/currentMilestone+currentStatus; project laufend/abgelaufen from currentStatus+end; approvals-needed from neededVoteMajorityInBps; donor COUNT from the length of the `donors` address list (a mapping has no on-chain count). Milestone `percentage` is in basis points and sums to 10000. INVARIANT (Spende → Stimme → Auszahlung): validators only vote once the goal is reached (currentStatus === 'Payout'); while 'Funding' every milestone has readyToBeApproved=false and 0 votes.",
+  "_comment": "MOCK of SOURCE 1: the on-chain state, shaped exactly like the Donation / DonationFactory contracts (branch contractDonation). The frontend reads these via ethers.js: the campaign list = DonationFactory.getProjects() (address[]); per campaign the Donation getters (donationGoal, totalDonations, getDonors(), start, end, currentStatus, currentMilestoneIndex, totalPayout, milestoneVotingDeadline, refundableBalance, getValidators(), getMilestones()). Amounts are the chain's NATIVE coin (donate() takes msg.value; no ERC-20 token) and are shown here as human-readable whole-coin numbers (on-chain they are wei, converted via parseEther/formatEther at the ethers boundary). Joined to projectMetadata.json by `address` (the unique project id). Only raw on-chain values live here — anything the UI shows that looks computed is DERIVED in projectsService: 'days left'/'time left' from `end`; milestone 'status' from paid/votingFinished/currentMilestoneIndex+currentStatus; project laufend/abgelaufen from currentStatus+end; approvals-needed from the 66.66% majority constant; donor COUNT from the length of the `donors` address list (a mapping has no on-chain count). Each milestone's `amount` is absolute and all amounts sum to `donationGoal`. VOTING MODEL: milestone 0 is paid immediately once funding succeeds; every later milestone is released only after validators approve the PREVIOUS one, so a milestone's approvedCount/rejectedCount are the votes cast on it after payout (the milestone being voted on is currentMilestoneIndex-1, while milestoneVotingDeadline is in the future and its votingFinished is false). The contract also stores an on-chain project `description` and per-milestone `description`, but the frontend ignores them — all display text comes from projectMetadata.json.",
   "campaigns": [
     {
       "address": "0x7f4b2c9d1e3a5f7c8b0d2e4a6c8f1b3d5e7089a2",
@@ -29,19 +29,20 @@
       "start": 1779267600,
       "end": 1783177200,
       "currentStatus": "Funding",
-      "currentMilestone": 0,
+      "currentMilestoneIndex": 0,
       "totalPayout": 0,
-      "neededVoteMajorityInBps": 6666,
+      "milestoneVotingDeadline": 0,
+      "refundableBalance": 0,
       "validators": [
         "0x12b9f3a7c1e5d8b04a6f2c9e7b1d3a5f8c0e2b34",
         "0x88f2d4b6a8c0e2f4b6d8a0c2e4f6b8d0a2c4e610",
         "0x55a1c3e5b7d9f0a2c4e6b8d0f2a4c6e8b0d2f491"
       ],
       "milestones": [
-        { "percentage": 1800, "readyToBeApproved": false, "approvedCount": 0, "rejectedCount": 0, "paid": false },
-        { "percentage": 3600, "readyToBeApproved": false, "approvedCount": 0, "rejectedCount": 0, "paid": false },
-        { "percentage": 2800, "readyToBeApproved": false, "approvedCount": 0, "rejectedCount": 0, "paid": false },
-        { "percentage": 1800, "readyToBeApproved": false, "approvedCount": 0, "rejectedCount": 0, "paid": false }
+        { "amount": 11880, "approvedCount": 0, "rejectedCount": 0, "votingFinished": false, "paid": false },
+        { "amount": 23760, "approvedCount": 0, "rejectedCount": 0, "votingFinished": false, "paid": false },
+        { "amount": 18480, "approvedCount": 0, "rejectedCount": 0, "votingFinished": false, "paid": false },
+        { "amount": 11880, "approvedCount": 0, "rejectedCount": 0, "votingFinished": false, "paid": false }
       ]
     },
     {
@@ -66,18 +67,19 @@
       "start": 1779703200,
       "end": 1782756000,
       "currentStatus": "Funding",
-      "currentMilestone": 0,
+      "currentMilestoneIndex": 0,
       "totalPayout": 0,
-      "neededVoteMajorityInBps": 6666,
+      "milestoneVotingDeadline": 0,
+      "refundableBalance": 0,
       "validators": [
         "0x12b9f3a7c1e5d8b04a6f2c9e7b1d3a5f8c0e2b34",
         "0x88f2d4b6a8c0e2f4b6d8a0c2e4f6b8d0a2c4e610",
         "0x55a1c3e5b7d9f0a2c4e6b8d0f2a4c6e8b0d2f491"
       ],
       "milestones": [
-        { "percentage": 4000, "readyToBeApproved": false, "approvedCount": 0, "rejectedCount": 0, "paid": false },
-        { "percentage": 3400, "readyToBeApproved": false, "approvedCount": 0, "rejectedCount": 0, "paid": false },
-        { "percentage": 2600, "readyToBeApproved": false, "approvedCount": 0, "rejectedCount": 0, "paid": false }
+        { "amount": 6000, "approvedCount": 0, "rejectedCount": 0, "votingFinished": false, "paid": false },
+        { "amount": 5100, "approvedCount": 0, "rejectedCount": 0, "votingFinished": false, "paid": false },
+        { "amount": 3900, "approvedCount": 0, "rejectedCount": 0, "votingFinished": false, "paid": false }
       ]
     },
     {
@@ -154,18 +156,19 @@
       "start": 1771142400,
       "end": 1777579200,
       "currentStatus": "Closed",
-      "currentMilestone": 2,
+      "currentMilestoneIndex": 2,
       "totalPayout": 40000,
-      "neededVoteMajorityInBps": 6666,
+      "milestoneVotingDeadline": 0,
+      "refundableBalance": 0,
       "validators": [
         "0x12b9f3a7c1e5d8b04a6f2c9e7b1d3a5f8c0e2b34",
         "0x88f2d4b6a8c0e2f4b6d8a0c2e4f6b8d0a2c4e610",
         "0x55a1c3e5b7d9f0a2c4e6b8d0f2a4c6e8b0d2f491"
       ],
       "milestones": [
-        { "percentage": 2500, "readyToBeApproved": true, "approvedCount": 3, "rejectedCount": 0, "paid": true },
-        { "percentage": 3750, "readyToBeApproved": true, "approvedCount": 3, "rejectedCount": 0, "paid": true },
-        { "percentage": 3750, "readyToBeApproved": true, "approvedCount": 3, "rejectedCount": 0, "paid": true }
+        { "amount": 10000, "approvedCount": 3, "rejectedCount": 0, "votingFinished": true, "paid": true },
+        { "amount": 15000, "approvedCount": 3, "rejectedCount": 0, "votingFinished": true, "paid": true },
+        { "amount": 15000, "approvedCount": 0, "rejectedCount": 0, "votingFinished": false, "paid": true }
       ]
     },
     {
@@ -222,18 +225,19 @@
       "start": 1778396400,
       "end": 1783080000,
       "currentStatus": "Payout",
-      "currentMilestone": 1,
-      "totalPayout": 3500,
-      "neededVoteMajorityInBps": 6666,
+      "currentMilestoneIndex": 2,
+      "totalPayout": 5000,
+      "milestoneVotingDeadline": 1788000000,
+      "refundableBalance": 0,
       "validators": [
         "0x12b9f3a7c1e5d8b04a6f2c9e7b1d3a5f8c0e2b34",
         "0x88f2d4b6a8c0e2f4b6d8a0c2e4f6b8d0a2c4e610",
         "0x55a1c3e5b7d9f0a2c4e6b8d0f2a4c6e8b0d2f491"
       ],
       "milestones": [
-        { "percentage": 5833, "readyToBeApproved": true, "approvedCount": 2, "rejectedCount": 0, "paid": true },
-        { "percentage": 2500, "readyToBeApproved": true, "approvedCount": 1, "rejectedCount": 0, "paid": false },
-        { "percentage": 1667, "readyToBeApproved": false, "approvedCount": 0, "rejectedCount": 0, "paid": false }
+        { "amount": 3500, "approvedCount": 3, "rejectedCount": 0, "votingFinished": true, "paid": true },
+        { "amount": 1500, "approvedCount": 1, "rejectedCount": 0, "votingFinished": false, "paid": true },
+        { "amount": 1000, "approvedCount": 0, "rejectedCount": 0, "votingFinished": false, "paid": false }
       ]
     },
     {
@@ -273,18 +277,19 @@
       "start": 1778230800,
       "end": 1783807200,
       "currentStatus": "Funding",
-      "currentMilestone": 0,
+      "currentMilestoneIndex": 0,
       "totalPayout": 0,
-      "neededVoteMajorityInBps": 6666,
+      "milestoneVotingDeadline": 0,
+      "refundableBalance": 0,
       "validators": [
         "0x12b9f3a7c1e5d8b04a6f2c9e7b1d3a5f8c0e2b34",
         "0x88f2d4b6a8c0e2f4b6d8a0c2e4f6b8d0a2c4e610",
         "0x55a1c3e5b7d9f0a2c4e6b8d0f2a4c6e8b0d2f491"
       ],
       "milestones": [
-        { "percentage": 2700, "readyToBeApproved": false, "approvedCount": 0, "rejectedCount": 0, "paid": false },
-        { "percentage": 4000, "readyToBeApproved": false, "approvedCount": 0, "rejectedCount": 0, "paid": false },
-        { "percentage": 3300, "readyToBeApproved": false, "approvedCount": 0, "rejectedCount": 0, "paid": false }
+        { "amount": 8100, "approvedCount": 0, "rejectedCount": 0, "votingFinished": false, "paid": false },
+        { "amount": 12000, "approvedCount": 0, "rejectedCount": 0, "votingFinished": false, "paid": false },
+        { "amount": 9900, "approvedCount": 0, "rejectedCount": 0, "votingFinished": false, "paid": false }
       ]
     }
   ]
