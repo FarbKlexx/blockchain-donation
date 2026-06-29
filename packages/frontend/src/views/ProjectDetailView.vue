@@ -2,7 +2,8 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { Funding, Project } from '@/types/project'
-import { getProject } from '@/services/projectsService'
+import { getProject, voteOnMilestone } from '@/services/projectsService'
+import { useWalletStore } from '@/stores/wallet'
 import { formatDate } from '@/utils/format'
 import ProjectHero from '@/components/project/ProjectHero.vue'
 import FundingCard from '@/components/project/FundingCard.vue'
@@ -11,6 +12,7 @@ import ValidatorsCard from '@/components/project/ValidatorsCard.vue'
 import MilestoneCard from '@/components/project/MilestoneCard.vue'
 import ProjectDetailSkeleton from '@/components/project/ProjectDetailSkeleton.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
+import ImageSlider from '@/components/ui/ImageSlider.vue'
 
 const props = defineProps<{ id: string }>()
 
@@ -24,6 +26,41 @@ const tabs: { key: TabKey; label: string }[] = [
 const project = ref<Project | null>(null)
 const loading = ref(true)
 const activeTab = ref<TabKey>('beschreibung')
+
+// Owner of THIS project (from the session's cached memberships) → may edit its
+// off-chain metadata. UI gating only; the save is authorized by the backend.
+const wallet = useWalletStore()
+const isOwner = computed(
+  () => !!project.value && wallet.roleInProject(project.value.contract.address).isOwner,
+)
+// Validator of THIS project → may vote on its current milestone.
+const isValidator = computed(
+  () => !!project.value && wallet.roleInProject(project.value.contract.address).isValidator,
+)
+
+// This account's votes cast THIS session, keyed by milestone position. Local UI
+// reflection only — the contract write is a placeholder (voteOnMilestone), so
+// nothing is persisted. Once wired, this comes from chain (hasVoted/votes).
+const myVotes = ref<Record<number, 'approve' | 'reject'>>({})
+const voteErrors = ref<Record<number, string>>({})
+const votingIndex = ref<number | null>(null)
+
+async function onVote(index: number, approve: boolean) {
+  if (!project.value || votingIndex.value !== null) return
+  votingIndex.value = index
+  delete voteErrors.value[index]
+  try {
+    await voteOnMilestone(project.value.contract.address, index, approve)
+    myVotes.value[index] = approve ? 'approve' : 'reject'
+  } catch (e) {
+    // Surface failures (today: the local-signer guard; once wired: a revert)
+    // instead of swallowing them — mirrors the donate flow in ProjectHero.
+    voteErrors.value[index] =
+      e instanceof Error ? e.message : 'Abstimmung fehlgeschlagen. Bitte erneut versuchen.'
+  } finally {
+    votingIndex.value = null
+  }
+}
 
 // Lifecycle gate (Spende → Stimme → Auszahlung): validators may only vote on
 // milestones once the funding goal is reached. The milestone UI keys off this,
@@ -48,6 +85,8 @@ function updateIndicator() {
 async function load() {
   loading.value = true
   activeTab.value = 'beschreibung'
+  myVotes.value = {}
+  voteErrors.value = {}
   try {
     project.value = await getProject(props.id)
   } finally {
@@ -83,6 +122,15 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
     <!-- Always visible (needs no data) — keeps the layout stable across loading. -->
     <div class="detail__topbar">
       <RouterLink :to="{ name: 'home' }" class="detail__back">← Alle Projekte</RouterLink>
+      <!-- Owner-only: edit the project's off-chain metadata. -->
+      <RouterLink
+        v-if="project && isOwner"
+        :to="{ name: 'project-edit', params: { id: project.id } }"
+        class="detail__edit"
+      >
+        <AppIcon name="pencil" :size="14" />
+        Projekt bearbeiten
+      </RouterLink>
     </div>
 
     <ProjectDetailSkeleton v-if="loading" />
@@ -130,18 +178,23 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
               <AppIcon :name="goalReached ? 'circle-help' : 'lock'" :size="14" />
               {{
                 goalReached
-                  ? 'Validatoren stimmen über jeden Meilenstein ab — Gelder werden erst nach deren Bestätigung freigegeben.'
+                  ? 'Nach Zielerreichung wird der erste Meilenstein ausgezahlt; Validatoren bestätigen jeden ausgezahlten Meilenstein und geben damit den nächsten frei.'
                   : 'Die Abstimmung über die Meilensteine beginnt erst, sobald das Finanzierungsziel erreicht ist.'
               }}
             </p>
             <div class="milestones__list">
               <MilestoneCard
-                v-for="m in project.milestones"
+                v-for="(m, i) in project.milestones"
                 :key="m.index"
                 :milestone="m"
                 :validators="project.validators"
                 :currency="project.currency"
                 :voting-open="goalReached"
+                :can-vote="isValidator && m.status === 'in_progress' && !myVotes[i]"
+                :my-vote="myVotes[i] ?? null"
+                :voting="votingIndex === i"
+                :vote-error="voteErrors[i] ?? null"
+                @vote="onVote(i, $event)"
               />
             </div>
           </div>
@@ -151,6 +204,12 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
             <article v-for="(entry, i) in project.news" :key="i" class="news__entry">
               <p class="news__meta">{{ formatDate(entry.date) }}</p>
               <h3 class="news__title">{{ entry.title }}</h3>
+              <ImageSlider
+                v-if="entry.images.length"
+                :images="entry.images"
+                :alt="entry.title"
+                class="news__media"
+              />
               <p class="news__body">{{ entry.body }}</p>
             </article>
             <p v-if="project.news.length === 0" class="detail__state">
@@ -185,7 +244,28 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
 }
 
 .detail__topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   padding: 48px var(--bd-page-gutter) 16px;
+}
+
+.detail__edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: 1px solid var(--bd-stroke);
+  border-radius: var(--bd-radius-sm);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--bd-black);
+  background: var(--bd-surface);
+}
+
+.detail__edit:hover {
+  border-color: var(--bd-black);
 }
 
 .detail__hero-wrap {

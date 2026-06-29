@@ -2,15 +2,22 @@
 //
 // On-chain values must NEVER be JS floats. The validated decimal STRING that
 // these helpers return is exactly what later goes to ethers
-// `parseUnits(amount, decimals)` → bigint. We never do float math on the value
+// `parseEther(amount)` → bigint wei. We never do float math on the value
 // that becomes a transaction.
 
-/** Decimals per token symbol. USDC uses 6. */
-const TOKEN_DECIMALS: Record<string, number> = { USDC: 6 }
-export const DEFAULT_DECIMALS = 6
+// Donations are the chain's NATIVE coin (the contract's `donate()` takes
+// `msg.value` — there is no ERC-20 token), so there is a single currency for
+// every campaign. Keyed to the deployment chain alongside the explorer config
+// in utils/address.ts (Ethereum → ETH/18). Change both together per chain.
+export const NATIVE_CURRENCY = 'ETH'
+export const NATIVE_DECIMALS = 18
+export const DEFAULT_DECIMALS = NATIVE_DECIMALS
 
-export function decimalsFor(currency: string): number {
-  return TOKEN_DECIMALS[currency] ?? DEFAULT_DECIMALS
+/** Decimals for an amount. All campaigns use the native coin, so the argument
+ *  is accepted for call-site symmetry but the result is always the native
+ *  precision. (Becomes a real lookup only if ERC-20 support is ever added.) */
+export function decimalsFor(_currency?: string): number {
+  return NATIVE_DECIMALS
 }
 
 export type AmountValidation = { ok: true; value: string } | { ok: false; error: string }

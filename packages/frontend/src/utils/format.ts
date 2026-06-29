@@ -20,6 +20,33 @@ export function percentFunded(raised: number, goal: number): number {
   return Math.min(100, Math.round((raised / goal) * 100))
 }
 
+// ── Time-left derivations ────────────────────────────────────────────────────
+// The contract stores only `start` / `end` (Unix seconds). "Days left" and the
+// countdown label are NOT on-chain — they are computed here against the current
+// time. `nowMs` is injectable so these stay pure and testable.
+
+const SECONDS_PER_DAY = 86_400
+
+/** Whole days remaining until `end` (Unix seconds), clamped at 0. */
+export function daysLeftUntil(end: number, nowMs: number = Date.now()): number {
+  const remaining = end - Math.floor(nowMs / 1000)
+  return remaining <= 0 ? 0 : Math.floor(remaining / SECONDS_PER_DAY)
+}
+
+/** Whether the campaign's `end` (Unix seconds) has passed. */
+export function hasEnded(end: number, nowMs: number = Date.now()): boolean {
+  return Math.floor(nowMs / 1000) >= end
+}
+
+/** Compact countdown for cards, e.g. "11d, 3 Std." — or "Beendet" once over. */
+export function timeLeftShort(end: number, nowMs: number = Date.now()): string {
+  const remaining = end - Math.floor(nowMs / 1000)
+  if (remaining <= 0) return 'Beendet'
+  const days = Math.floor(remaining / SECONDS_PER_DAY)
+  const hours = Math.floor((remaining % SECONDS_PER_DAY) / 3600)
+  return `${days}d, ${hours} Std.`
+}
+
 /** "2026-05-28" -> "28. Mai 2026". */
 export function formatDate(iso: string): string {
   const date = new Date(iso)

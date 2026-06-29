@@ -4,16 +4,16 @@
 // vector), and the address stays the single on-chain source of truth.
 //
 // TODO(integration): match this to the deployed chain (ideally keyed by the
-// connected chainId). Polygon mainnet → Polygonscan.
-const EXPLORER_BASE_URL = 'https://polygonscan.com'
-export const EXPLORER_NAME = 'Polygonscan'
+// connected chainId). Ethereum mainnet → Etherscan.
+const EXPLORER_BASE_URL = 'https://etherscan.io'
+export const EXPLORER_NAME = 'Etherscan'
 
 /** Explorer page for a contract address (scheme is fixed → not injectable). */
 export function explorerAddressUrl(address: string): string {
   return `${EXPLORER_BASE_URL}/address/${encodeURIComponent(address)}`
 }
 
-/** Link label, e.g. "View on Polygonscan". */
+/** Link label, e.g. "View on Etherscan". */
 export const explorerLabel = `View on ${EXPLORER_NAME}`
 
 /**

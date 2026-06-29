@@ -1,8 +1,10 @@
 {
-  "_comment": "MOCK of SOURCE 2: the backend API (off-chain metadata). Human-readable content the frontend will later fetch over REST — texts, images, news, and the display names/avatars for milestones and validators. Joined onto contractData.json by id (project), index (milestones) and address (validators).",
+  "_comment": "MOCK of SOURCE 2: the backend API (off-chain metadata). Human-readable content the frontend will later fetch over REST — texts, images, news, milestone titles/descriptions. Joined onto contractData.json by `address` (the on-chain contract address, stored here as the project's unique id); milestones join by array position. `id` is a human slug used only for routes. `verified` is a backend assertion (NOT on-chain). Validators are not here — they are anonymous on-chain addresses from the contract.",
   "projects": [
     {
+      "address": "0x7f4b2c9d1e3a5f7c8b0d2e4a6c8f1b3d5e7089a2",
       "id": "burger-restaurant",
+      "verified": true,
       "title": "Burger Restaurant",
       "summary": "Ein neues Burger-Restaurant mit regionalen Zutaten und nachhaltiger Küche.",
       "description": [
@@ -10,7 +12,7 @@
         "Wir planen ein Menü mit klassischen Burgern, saisonalen Spezialitäten und einer kleinen Bar. Ziel ist es, ein beliebtes Lokal zu schaffen, das sich in die Nachbarschaft einfügt und langfristig erfolgreich ist.",
         "Mit dieser Kampagne finanzieren wir den Umbau des Lokals, die Ausstattung der Küche und den Startbetrieb. Unterstützen Sie uns dabei, ein neues kulinarisches Highlight in der Stadt zu schaffen."
       ],
-      "image": "https://picsum.photos/seed/burger-restaurant/800/480",
+      "image": "uploads/burger-restaurant/cover.jpg",
       "category": "Fairer Handel & Bio",
       "milestones": [
         { "index": "01", "title": "Standort-Suche & Mietvertrag", "description": "Findung des perfekten Standorts und Abschluss des Mietvertrags für das zukünftige Restaurant." },
@@ -22,24 +24,34 @@
         {
           "date": "2026-05-28",
           "title": "Warum wir dieses Projekt starten",
-          "body": "Unser Ziel ist es, ein Restaurant zu schaffen, das nicht nur lecker schmeckt, sondern auch die lokale Wirtschaft stärkt. Mit deiner Unterstützung können wir die Küche ausrüsten, das Team aufbauen und die ersten Monate sichern. Jeder Beitrag hilft uns, die Vision eines fairen, regionalen Burger-Restaurants in der Innenstadt zu verwirklichen."
+          "body": "Unser Ziel ist es, ein Restaurant zu schaffen, das nicht nur lecker schmeckt, sondern auch die lokale Wirtschaft stärkt. Mit deiner Unterstützung können wir die Küche ausrüsten, das Team aufbauen und die ersten Monate sichern. Jeder Beitrag hilft uns, die Vision eines fairen, regionalen Burger-Restaurants in der Innenstadt zu verwirklichen.",
+          "images": [
+            "uploads/burger-restaurant/news-1.jpg",
+            "uploads/burger-restaurant/news-2.jpg",
+            "uploads/burger-restaurant/news-3.jpg"
+          ]
         },
         {
           "date": "2026-06-10",
           "title": "So werden die Mittel eingesetzt",
-          "body": "Die Mittel werden direkt in die Ausstattung der Küche, die Auswahl lokaler Lieferanten und die Eröffnungsphase investiert. Wir halten dich über jeden Schritt auf dem Laufenden – von der Planung bis zur ersten Öffnung."
+          "body": "Die Mittel werden direkt in die Ausstattung der Küche, die Auswahl lokaler Lieferanten und die Eröffnungsphase investiert. Wir halten dich über jeden Schritt auf dem Laufenden – von der Planung bis zur ersten Öffnung.",
+          "images": [
+            "uploads/burger-restaurant/news-4.jpg"
+          ]
         }
       ]
     },
     {
+      "address": "0x3a1d8c2b4e6f0a9c7b5d3e1f8a06c4b2d9e177be",
       "id": "mesh-netzwerk-festivals",
+      "verified": true,
       "title": "Mesh-Netzwerk für Festivals",
       "summary": "Dezentrales WLAN, das auch ohne Mobilfunk funktioniert.",
       "description": [
         "Auf großen Festivals bricht das Mobilfunknetz regelmäßig zusammen. Wir bauen ein dezentrales Mesh-Netzwerk aus günstigen Funkknoten, das auch bei zehntausenden Besuchern stabil bleibt.",
         "Die Knoten sind solarbetrieben, wetterfest und in wenigen Minuten aufgebaut. Mit deiner Unterstützung finanzieren wir Hardware, Software und einen ersten Feldtest auf einem Partnerfestival."
       ],
-      "image": "https://picsum.photos/seed/mesh-netzwerk/800/480",
+      "image": "uploads/mesh-netzwerk-festivals/cover.jpg",
       "category": "Open Source",
       "milestones": [
         { "index": "01", "title": "Hardware-Beschaffung", "description": "Einkauf der Funkmodule, Solarpanels und wetterfesten Gehäuse für die erste Knotenserie." },
@@ -50,19 +62,25 @@
         {
           "date": "2026-06-08",
           "title": "Erste Knoten sind da",
-          "body": "Die erste Charge der Funkmodule ist eingetroffen und die Lötarbeiten haben begonnen. Als Nächstes steht der Aufbau des Routing-Stacks an."
+          "body": "Die erste Charge der Funkmodule ist eingetroffen und die Lötarbeiten haben begonnen. Als Nächstes steht der Aufbau des Routing-Stacks an.",
+          "images": [
+            "uploads/mesh-netzwerk-festivals/news-1.jpg",
+            "uploads/mesh-netzwerk-festivals/news-2.jpg"
+          ]
         }
       ]
     },
     {
+      "address": "0x9c2e7b4d1a8f3c6b0d5e9a2f7c1b8d6e304541af",
       "id": "roguelike-aetherbound",
+      "verified": true,
       "title": "Roguelike „Aetherbound“",
       "summary": "Ein handgezeichnetes Indie-Roguelike aus einem kleinen Studio.",
       "description": [
         "„Aetherbound“ ist ein handgezeichnetes Action-Roguelike, das wir mit einem kleinen, unabhängigen Team entwickeln. Jeder Durchlauf ist anders, jede Entscheidung zählt.",
         "Mit der Finanzierung sichern wir die Fertigstellung von Art, Sound und Early-Access-Version – komplett unabhängig von großen Publishern."
       ],
-      "image": "https://picsum.photos/seed/aetherbound/800/480",
+      "image": "uploads/roguelike-aetherbound/cover.jpg",
       "category": "Games",
       "milestones": [
         { "index": "01", "title": "Spielbarer Prototyp", "description": "Fertigstellung des Kern-Gameplay-Loops und eines spielbaren vertikalen Slices." },
@@ -73,19 +91,24 @@
         {
           "date": "2026-04-30",
           "title": "Ziel erreicht – danke!",
-          "body": "Die Kampagne ist erfolgreich abgeschlossen. Alle Meilensteine wurden von den Validatoren bestätigt und die Mittel vollständig freigegeben."
+          "body": "Die Kampagne ist erfolgreich abgeschlossen. Alle Meilensteine wurden von den Validatoren bestätigt und die Mittel vollständig freigegeben.",
+          "images": [
+            "uploads/roguelike-aetherbound/news-1.jpg"
+          ]
         }
       ]
     },
     {
+      "address": "0x4d8f1a3c5e7b9d0a2c4e6f8b1d3a5c7e9f040b73",
       "id": "mobile-suppenkueche-berlin",
+      "verified": true,
       "title": "Mobile Suppenküche Berlin",
       "summary": "Ein umgebauter Foodtruck für warme Mahlzeiten auf der Straße.",
       "description": [
         "Mit einem umgebauten Foodtruck bringen wir warme, frisch gekochte Mahlzeiten direkt zu Menschen in Not – an wechselnden Standorten in ganz Berlin.",
         "Die Spenden finanzieren den Kauf des Fahrzeugs, den Küchenumbau und die Erstausstattung mit Zutaten für die ersten Monate."
       ],
-      "image": "https://picsum.photos/seed/suppenkueche/800/480",
+      "image": "uploads/mobile-suppenkueche-berlin/cover.jpg",
       "category": "Soziales",
       "milestones": [
         { "index": "01", "title": "Foodtruck-Kauf", "description": "Anschaffung eines gebrauchten, TÜV-geprüften Transporters als Basis für die mobile Küche." },
@@ -96,19 +119,22 @@
         {
           "date": "2026-06-12",
           "title": "Der Truck rollt bald",
-          "body": "Wir haben einen passenden Transporter gefunden und der Küchenumbau läuft. Bald kochen wir die erste Suppe!"
+          "body": "Wir haben einen passenden Transporter gefunden und der Küchenumbau läuft. Bald kochen wir die erste Suppe!",
+          "images": []
         }
       ]
     },
     {
+      "address": "0x6e0b4d6f8a0c2e4b6d8f0a2c4e6b8d0f2a46a2c5",
       "id": "wiederaufforstung-eifel",
+      "verified": true,
       "title": "Wiederaufforstung Eifel",
       "summary": "10.000 heimische Bäume gegen Monokultur und Borkenkäfer.",
       "description": [
         "Die Stürme und Borkenkäfer der letzten Jahre haben in der Eifel große Kahlflächen hinterlassen. Wir pflanzen 10.000 standortgerechte, heimische Bäume und schaffen einen klimastabilen Mischwald.",
         "Die Mittel decken Flächensicherung, Setzlinge und die organisierten Pflanzaktionen mit Freiwilligen aus der Region."
       ],
-      "image": "https://picsum.photos/seed/eifel-wald/800/480",
+      "image": "uploads/wiederaufforstung-eifel/cover.jpg",
       "category": "Umwelt",
       "milestones": [
         { "index": "01", "title": "Flächensicherung", "description": "Pacht und rechtliche Sicherung der Aufforstungsflächen in Abstimmung mit dem Forstamt." },
@@ -119,7 +145,11 @@
         {
           "date": "2026-06-05",
           "title": "Flächen gesichert",
-          "body": "Die ersten Aufforstungsflächen sind gepachtet und freigegeben. Jetzt sammeln wir für die Setzlinge."
+          "body": "Die ersten Aufforstungsflächen sind gepachtet und freigegeben. Jetzt sammeln wir für die Setzlinge.",
+          "images": [
+            "uploads/wiederaufforstung-eifel/news-1.jpg",
+            "uploads/wiederaufforstung-eifel/news-2.jpg"
+          ]
         }
       ]
     }

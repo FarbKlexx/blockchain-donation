@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest'
-import { percentFunded, formatAmount } from '../format'
-import { validateAmount, decimalsFor } from '../amount'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { percentFunded, formatAmount, daysLeftUntil, hasEnded, timeLeftShort } from '../format'
+import { validateAmount, decimalsFor, NATIVE_CURRENCY } from '../amount'
 import { shortenAddress, explorerAddressUrl } from '../address'
+import { mediaUrl } from '../media'
 
 describe('percentFunded', () => {
   it('rounds and clamps to 0–100', () => {
@@ -22,7 +23,7 @@ describe('formatAmount', () => {
 })
 
 describe('validateAmount', () => {
-  const decimals = decimalsFor('USDC') // 6
+  const decimals = decimalsFor(NATIVE_CURRENCY) // 18 (native coin)
 
   it('accepts valid decimals', () => {
     expect(validateAmount('10', decimals)).toEqual({ ok: true, value: '10' })
@@ -35,16 +36,64 @@ describe('validateAmount', () => {
     expect(validateAmount('-5', decimals).ok).toBe(false)
   })
 
-  it('rejects non-finite / exponent / garbage (parseUnits footguns)', () => {
+  it('rejects non-finite / exponent / garbage (parseEther footguns)', () => {
     expect(validateAmount('Infinity', decimals).ok).toBe(false)
     expect(validateAmount('NaN', decimals).ok).toBe(false)
     expect(validateAmount('1e9', decimals).ok).toBe(false)
     expect(validateAmount('0x10', decimals).ok).toBe(false)
   })
 
-  it('rejects more fractional digits than the token supports', () => {
-    expect(validateAmount('1.1234567', decimals).ok).toBe(false) // 7 > 6
-    expect(validateAmount('1.123456', decimals).ok).toBe(true)
+  it('rejects more fractional digits than the coin supports', () => {
+    expect(validateAmount('1.' + '1'.repeat(19), decimals).ok).toBe(false) // 19 > 18
+    expect(validateAmount('1.' + '1'.repeat(18), decimals).ok).toBe(true)
+  })
+})
+
+describe('time-left derivations', () => {
+  // Fixed reference instant so the derivations are deterministic.
+  const now = Date.UTC(2026, 5, 23, 12, 0, 0) // 2026-06-23T12:00:00Z (ms)
+  const end = Math.floor(now / 1000) + 11 * 86400 + 3 * 3600 // +11d 3h
+
+  it('floors whole days remaining', () => {
+    expect(daysLeftUntil(end, now)).toBe(11)
+  })
+
+  it('formats the compact countdown', () => {
+    expect(timeLeftShort(end, now)).toBe('11d, 3 Std.')
+  })
+
+  it('clamps a passed deadline to 0 / "Beendet"', () => {
+    const past = Math.floor(now / 1000) - 86400
+    expect(daysLeftUntil(past, now)).toBe(0)
+    expect(timeLeftShort(past, now)).toBe('Beendet')
+    expect(hasEnded(past, now)).toBe(true)
+    expect(hasEnded(end, now)).toBe(false)
+  })
+})
+
+describe('mediaUrl', () => {
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('turns a relative key into a root-relative URL (default base)', () => {
+    expect(mediaUrl('uploads/p/cover.jpg')).toBe('/uploads/p/cover.jpg')
+  })
+
+  it('collapses a leading slash on the key (no double slash)', () => {
+    expect(mediaUrl('/uploads/p/cover.jpg')).toBe('/uploads/p/cover.jpg')
+  })
+
+  it('prepends a configured media base, without doubling slashes', () => {
+    vi.stubEnv('VITE_MEDIA_BASE_URL', 'https://cdn.example.com/')
+    expect(mediaUrl('uploads/p/cover.jpg')).toBe('https://cdn.example.com/uploads/p/cover.jpg')
+  })
+
+  it('leaves an already-absolute URL untouched', () => {
+    expect(mediaUrl('https://x.com/a.jpg')).toBe('https://x.com/a.jpg')
+    expect(mediaUrl('//x.com/a.jpg')).toBe('//x.com/a.jpg')
+  })
+
+  it('returns empty string for an empty ref', () => {
+    expect(mediaUrl('')).toBe('')
   })
 })
 
@@ -56,7 +105,7 @@ describe('address helpers', () => {
   })
 
   it('derives the explorer URL from the address (fixed https scheme)', () => {
-    expect(explorerAddressUrl(full)).toBe(`https://polygonscan.com/address/${full}`)
+    expect(explorerAddressUrl(full)).toBe(`https://etherscan.io/address/${full}`)
     expect(explorerAddressUrl(full).startsWith('https://')).toBe(true)
   })
 })

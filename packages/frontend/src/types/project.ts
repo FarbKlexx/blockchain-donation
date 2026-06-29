@@ -25,10 +25,16 @@ export interface Milestone {
   /** Funds allocated to this milestone, in the project currency. */
   allocated: number
   status: MilestoneStatus
-  /** How many validators have confirmed this milestone so far. */
+  /** Validators who have approved THIS milestone so far (`approvedCount`). In the
+   *  contract their approval is what releases the NEXT milestone's payout. */
   confirmations: number
-  /** Total validators that must confirm before funds are released. */
+  /** Size of the validator set (denominator for the confirmation display). */
   totalValidators: number
+  /** Approvals needed to release the next milestone — a 66.66% majority of the
+   *  validator set. The contract's `neededVoteMajorityInBps` is a non-public
+   *  constant (no getter), so the frontend mirrors the literal (NOT every
+   *  validator). */
+  requiredApprovals: number
 }
 
 /** A project update entry shown under the "Neuigkeiten" tab. */
@@ -37,6 +43,9 @@ export interface NewsEntry {
   date: string
   title: string
   body: string
+  /** Image URLs for this entry (off-chain metadata). Zero → no media; one →
+   *  shown inline; multiple → a slider. */
+  images: string[]
 }
 
 /** Smart-contract info shown in the sidebar. */
@@ -45,7 +54,7 @@ export interface ContractInfo {
   address: string
   /** Explorer page URL — derived by the frontend from `address`, not stored. */
   explorerUrl: string
-  /** Label for the explorer link, e.g. "View on Polygonscan". */
+  /** Label for the explorer link, e.g. "View on Etherscan". */
   explorerLabel: string
 }
 
@@ -57,9 +66,9 @@ export interface Funding {
   goal: number
   /** Number of unique donors. */
   donors: number
-  /** Whole days remaining in the campaign. */
+  /** Whole days remaining — DERIVED from the contract's `end` timestamp. */
   daysLeft: number
-  /** Compact countdown label used on cards, e.g. "11d, 6 Std.". */
+  /** Compact countdown for cards, e.g. "11d, 6 Std." — DERIVED from `end`. */
   timeLeftShort: string
 }
 
@@ -75,9 +84,10 @@ export interface Project {
   image: string
   /** Category/label badge, e.g. "Fairer Handel & Bio". */
   category: string
-  /** Whether the smart contract has been verified. */
+  /** Whether the project is "verified" — a backend assertion (not on-chain). */
   verified: boolean
-  /** ISO 4217-ish currency code shown next to amounts, e.g. "USDC". */
+  /** Currency shown next to amounts. The chain's native coin (donations are
+   *  `msg.value`, no ERC-20 token), so it's the same for every campaign. */
   currency: string
   status: ProjectStatus
   funding: Funding
