@@ -56,6 +56,28 @@ const router = createRouter({
         if (!useWalletStore().isConnected) return { name: 'home' }
       },
     },
+    // ── Coupon subsystem (independent of the donation system) ──
+    {
+      path: '/gutscheine',
+      name: 'coupons',
+      // Lazy-loaded: separate chunk for the coupon landing page.
+      component: () => import('@/views/CouponView.vue'),
+    },
+    {
+      // The e-mail claim-link target. Auth = this token (right page) + wallet
+      // (rightful owner); the view drives the login + reveal.
+      path: '/gutschein/:token',
+      name: 'coupon-claim',
+      component: () => import('@/views/CouponClaimView.vue'),
+      props: true,
+    },
+    {
+      // Stand-in merchant checkout where a coupon is redeemed (anyone with the
+      // key). Optional ?id=&key= prefill from the claim page.
+      path: '/gutschein-einloesen',
+      name: 'coupon-redeem',
+      component: () => import('@/views/CouponRedeemView.vue'),
+    },
     {
       path: '/:pathMatch(.*)*',
       redirect: { name: 'home' },
