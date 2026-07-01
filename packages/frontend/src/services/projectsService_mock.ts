@@ -21,26 +21,15 @@
 // See INTEGRATION.md for the full UI-element → data-source mapping.
 // ─────────────────────────────────────────────────────────────────────────
 
-import { ethers } from 'ethers'
-import { DonationFactory__factory, Donation__factory } from '@/contracts/typechain'
+import contractData from '@/data/contractData.json'
 import type { Funding, MilestoneStatus, Project, ProjectFilter, ProjectSort, ProjectStatus } from '@/types/project'
 import type { ContractCampaign, ProjectMetadata } from '@/types/sources'
 import { daysLeftUntil, hasEnded, percentFunded, timeLeftShort } from '@/utils/format'
 import { NATIVE_CURRENCY, decimalsFor, validateAmount } from '@/utils/amount'
 import { explorerAddressUrl, explorerLabel } from '@/utils/address'
 
-const FACTORY_ADDRESS = import.meta.env.VITE_FACTORY_ADDRESS
-
-// Mapping uint8 from the chain to String for the frontend
-const STATUS_MAP = ['Funding', 'Payout', 'Failed', 'Closed'] as const;
-
-async function getBlockchainContext() {
-  if (!(window as any).ethereum) throw new Error('Keine Krypto-Wallet gefunden.')
-  const provider = new ethers.BrowserProvider((window as any).ethereum)
-  // Falls eine dev-Key-Infrastruktur aktiv ist, Signer daraus ableiten, sonst vom Browser:
-  const signer = await provider.getSigner()
-  return { provider, signer }
-}
+// In-memory copy of the on-chain campaign data (mutated by donate() to simulate state changes).
+const campaigns = contractData.campaigns as ContractCampaign[]
 
 async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, init)
@@ -63,82 +52,11 @@ function delay<T>(value: T, ms = 250): Promise<T> {
 // Campaigns are keyed by their contract address.
 
 async function fetchCampaigns(): Promise<ContractCampaign[]> {
-  try {
-    const { provider } = await getBlockchainContext()
-    const factory = DonationFactory__factory.connect(FACTORY_ADDRESS, provider)
-    
-    // fetch address[] from factory
-    const projectAddresses = await factory.getProjects()
-    
-    const campaigns = await Promise.all(
-      projectAddresses.map((addr: string) => fetchCampaignByAddress(addr))
-    )
-    
-    // filter failed campaigns
-    return campaigns.filter((c: ContractCampaign | null): c is ContractCampaign => c !== null)
-  } catch (error) {
-    console.error('Fehler beim Abrufen der Projektliste aus der Factory:', error)
-    return []
-  }
+  return delay(campaigns)
 }
 
 async function fetchCampaignByAddress(address: string): Promise<ContractCampaign | null> {
-  try {
-    const { provider } = await getBlockchainContext()
-    const contract = Donation__factory.connect(address, provider)
-
-    const [
-      contractOwner,
-      donationGoal,
-      totalDonations,
-      start,
-      end,
-      currentMilestoneIndex,
-      rawStatus,
-      validators,
-      rawMilestones,
-      milestoneVotingDeadline,
-      donors
-    ] = await Promise.all([
-      contract.contractOwner(),
-      contract.donationGoal(),
-      contract.totalDonations(),
-      contract.start(),
-      contract.end(),
-      contract.currentMilestoneIndex(),
-      contract.currentStatus(),
-      contract.getValidators(),
-      contract.getMilestones(),
-      contract.milestoneVotingDeadline(),
-      contract.getDonors()
-    ])
-
-    return {
-      address,
-      contractOwner,
-      donationGoal: Number(ethers.formatEther(donationGoal)),
-      totalDonations: Number(ethers.formatEther(totalDonations)),
-      start: Number(start),
-      end: Number(end),
-      currentMilestoneIndex: Number(currentMilestoneIndex),
-      currentStatus: STATUS_MAP[Number(rawStatus)] ?? 'Funding',
-      totalPayout: Number(ethers.formatEther(await contract.totalPayout())),
-      milestoneVotingDeadline: Number(milestoneVotingDeadline), // NEU eingepflegt
-      refundableBalance: Number(ethers.formatEther(await contract.refundableBalance())),
-      validators: [...validators],
-      donors: [...donors], // NEU eingepflegt
-      milestones: rawMilestones.map((ms) => ({
-        amount: Number(ethers.formatEther(ms.amount)),
-        approvedCount: Number(ms.approvedCount),
-        rejectedCount: Number(ms.rejectedCount),
-        votingFinished: ms.votingFinished,
-        paid: ms.paid
-      }))
-    }
-  } catch (error) {
-    console.error(`Fehler beim Laden des Contracts unter ${address}:`, error)
-    return null
-  }
+  return delay(campaigns.find((c) => c.address === address) ?? null)
 }
 
 // ── SOURCE 2: backend REST API (off-chain metadata) ─────────────────────────
@@ -184,43 +102,15 @@ export interface AccountSession {
  * the store and UI are untouched.
  */
 export async function loadAccountSession(address: string): Promise<AccountSession> {
-  const { provider } = await getBlockchainContext()
-  const factory = DonationFactory__factory.connect(FACTORY_ADDRESS, provider)
-  
-  // fetch all existing project addresses from factory
-  const projectAddresses = await factory.getProjects()
+  const a = address.toLowerCase()
+  const campaignList = await fetchCampaigns()
+  const includesAddr = (list: string[]) => list.some((x) => x.toLowerCase() === a)
 
-  const donorOf: string[] = []
-  const validatorOf: string[] = []
-  const ownerOf: string[] = []
-
-  // read campaign contracts in parallel
-  await Promise.all(
-    projectAddresses.map(async (contractAddress: string) => {
-      try {
-        const contract = Donation__factory.connect(contractAddress, provider)
-        
-        const [userDonation, isVal, owner] = await Promise.all([
-          contract.donations(address),  // (address => uint256)
-          contract.isValidator(address), // (address => bool)
-          contract.contractOwner()
-        ])
-
-        // donation check
-        if (userDonation > 0n) {
-          donorOf.push(contractAddress)
-        }
-        if (isVal) {
-          validatorOf.push(contractAddress)
-        }
-        if (owner.toLowerCase() === address.toLowerCase()) {
-          ownerOf.push(contractAddress)
-        }
-      } catch (err) {
-        console.error(`Fehler beim Rollen-Scan für Contract ${contractAddress}:`, err)
-      }
-    })
-  )
+  const donorOf = campaignList.filter((c) => includesAddr(c.donors)).map((c) => c.address)
+  const validatorOf = campaignList.filter((c) => includesAddr(c.validators)).map((c) => c.address)
+  const ownerOf = campaignList
+    .filter((c) => c.contractOwner.toLowerCase() === a)
+    .map((c) => c.address)
 
   return {
     address,
@@ -474,28 +364,24 @@ export interface DonationResult {
  */
 export async function donate(projectId: string, amount: string): Promise<DonationResult> {
   assertLocalSigner()
+
+  // Route id is the slug → resolve to the on-chain address, then the campaign.
   const meta = await fetchMetadataById(projectId)
-  if (!meta) throw new Error('Projkt-Metadaten nicht gefunden.')
+  const campaign = meta && campaigns.find((c) => c.address === meta.address)
+  if (!campaign) throw new Error('Projekt nicht gefunden.')
 
-  const { signer } = await getBlockchainContext()
-  const donationContract = Donation__factory.connect(meta.address, signer)
+  // Defense in depth: re-validate at the seam, not just in the UI.
+  const check = validateAmount(amount, decimalsFor(NATIVE_CURRENCY))
+  if (!check.ok) throw new Error(check.error)
 
-  // parse validated string as wei
-  const valueInWei = ethers.parseEther(amount)
+  // [mock] Simulate a confirmed transaction mutating on-chain state. After a
+  // real tx.wait(), the new figures would come from re-reading the contract.
+  // Append a donor so the derived count (donors.length) grows; on-chain a repeat
+  // donor would NOT add a new key — the re-read from chain settles that.
+  campaign.totalDonations += Number(check.value)
+  campaign.donors.push('0x' + '0'.repeat(40))
 
-  // send transaction
-  const tx = await donationContract.donate({ value: valueInWei })
-  const receipt = await tx.wait()
-  if (!receipt || receipt.status === 0) throw new Error('Transaktion fehlgeschlagen.')
-
-  // Re-Read from the chain
-  const updatedCampaign = await fetchCampaignByAddress(meta.address)
-  if (!updatedCampaign) throw new Error('Fehler beim Aktualisieren der Daten.')
-
-  return {
-    txHash: tx.hash,
-    funding: toFunding(updatedCampaign)
-  }
+  return delay({ txHash: '0xMOCK_TX_HASH', funding: toFunding(campaign) })
 }
 
 export interface VoteResult {
@@ -521,50 +407,20 @@ export interface VoteResult {
  *
  * [mock] Placeholder: no transaction is sent and no state is mutated.
  */
-export interface VoteMilestoneResult {
-  txHash: string
-  currentStatus: string
-  updatedMilestone: {
-    approvedCount: number
-    rejectedCount: number
-    votingFinished: boolean
-    paid: boolean
-  }
-}
-
 export async function voteOnMilestone(
   projectAddress: string,
   milestoneIndex: number,
-  approve: boolean
-): Promise<VoteMilestoneResult> {
-  const { signer, provider } = await getBlockchainContext()
-  const donationContract = Donation__factory.connect(projectAddress, signer)
-
-  const tx = await donationContract.voteMilestone(milestoneIndex, approve)
-  const receipt = await tx.wait()
-  if (!receipt || receipt.status === 0) {
-    throw new Error('Die Abstimmung auf der Blockchain ist fehlgeschlagen.')
+  approve: boolean,
+): Promise<VoteResult> {
+  assertLocalSigner()
+  if (import.meta.env.DEV) {
+    console.info('[projectsService] voteOnMilestone — mock no-op (no tx sent):', {
+      projectAddress,
+      milestoneIndex,
+      approve,
+    })
   }
-
-  // Authoritative re-read
-  const [rawMilestones, rawStatus] = await Promise.all([
-    donationContract.getMilestones(),
-    donationContract.currentStatus()
-  ])
-
-  const milestone = rawMilestones[milestoneIndex]
-  if (!milestone) throw new Error('Meilenstein nach Update nicht gefunden.')
-
-  return {
-    txHash: tx.hash,
-    currentStatus: STATUS_MAP[Number(rawStatus)] ?? 'Funding',
-    updatedMilestone: {
-      approvedCount: Number(milestone.approvedCount),
-      rejectedCount: Number(milestone.rejectedCount),
-      votingFinished: milestone.votingFinished,
-      paid: milestone.paid
-    }
-  }
+  return delay({ txHash: '0xMOCK_VOTE_TX_HASH' })
 }
 
 /** The editable, OFF-CHAIN slice of a project — exactly the metadata an owner
@@ -678,75 +534,33 @@ function mockContractAddress(): string {
  */
 export async function createProject(payload: CreateProjectPayload): Promise<CreateProjectResult> {
   assertLocalSigner()
-  const { signer } = await getBlockchainContext()
-  const factory = DonationFactory__factory.connect(FACTORY_ADDRESS, signer)
 
-  // convert into wei
-  const milestoneWeiAmounts = payload.contract.milestoneAmounts.map((amt) => ethers.parseEther(amt))
-  // description provided by source 2
-  const blankDescriptions = payload.contract.milestoneAmounts.map(() => '')
+  const address = mockContractAddress()
+  const txHash = '0xMOCK_CREATE_TX_HASH'
 
-  // deploy on chain
-  const tx = await factory.createDonation(
-    payload.contract.validators,
-    payload.contract.description,
-    payload.contract.durationSeconds,
-    milestoneWeiAmounts,
-    blankDescriptions
-  )
-  const receipt = await tx.wait()
-  if (!receipt || receipt.status === 0) throw new Error('Deployment auf der Blockchain fehlgeschlagen.')
-
-  // extract new address from event logs
-  let deployedAddress = ''
-  const factoryInterface = DonationFactory__factory.createInterface()
-  
-  for (const log of receipt.logs) {
-    try {
-      const parsed = factoryInterface.parseLog(log)
-      if (parsed && parsed.name === 'DonationContractCreated') {
-        deployedAddress = parsed.args.donationContract
-        break
-      }
-    } catch { continue }
-  }
-
-  if (!deployedAddress) throw new Error('Contract wurde aufgestellt, aber Adresse konnte nicht aus den Logs ermittelt werden.')
-
-  // prepare milestone structure for backend
   const milestones = payload.metadata.milestones.map((m, i) => ({
     index: String(i + 1).padStart(2, '0'),
     title: m.title,
     description: m.description,
   }))
 
-  // Schritt 2: Off-Chain Metadaten via REST-API speichern mit PARTIAL FAILURE HANDLING
-  try {
-    await fetchJson<{ status: string }>('/api/projects', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        address: deployedAddress,
-        title: payload.metadata.title,
-        summary: payload.metadata.summary,
-        category: payload.metadata.category,
-        image: payload.metadata.image,
-        description: payload.metadata.description,
-        verified: false,
-        milestones,
-        news: payload.metadata.news,
-      }),
-    })
-  } catch (apiError: any) {
-    // FEHLER-BEHANDLUNG: Contract existiert, aber DB-Eintrag schlug fehl!
-    console.error("CRITICAL CRASH: Contract deployed, but Backend Metadata Sync failed!", apiError)
-    throw new Error(
-      `Teilerfolg: Der Smart Contract wurde erfolgreich unter der Adresse "${deployedAddress}" aufgestellt (Tx: ${tx.hash}). ` +
-      `Das Speichern der Beschreibungstexte im Backend ist jedoch fehlgeschlagen. Bitte sichern Sie diese Adresse für den Support!`
-    )
-  }
+  await fetchJson<{ status: string; project_id: string }>('/api/projects', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      address,
+      title: payload.metadata.title,
+      summary: payload.metadata.summary,
+      category: payload.metadata.category,
+      image: payload.metadata.image,
+      description: payload.metadata.description,
+      verified: false,
+      milestones,
+      news: payload.metadata.news,
+    }),
+  })
 
-  return { address: deployedAddress, txHash: tx.hash }
+  return { address, txHash }
 }
 
 export interface WalletConnection {
@@ -756,17 +570,11 @@ export interface WalletConnection {
 /**
  * Connect a wallet (the navbar / hero buttons).
  *
+ * TODO(integration): in the project's dev scope this returns the Hardhat test
+ * account derived from VITE_DEV_PRIVATE_KEY; for real users swap in
+ * `new BrowserProvider(window.ethereum)` + `await provider.getSigner()`.
  */
 export async function connectWallet(): Promise<WalletConnection> {
   assertLocalSigner()
-  
-  // Dev fallback if private key exist else trigger real wallet window
-  if (import.meta.env.VITE_DEV_PRIVATE_KEY && import.meta.env.VITE_RPC_URL) {
-    const provider = new ethers.JsonRpcProvider(import.meta.env.VITE_RPC_URL)
-    const wallet = new ethers.Wallet(import.meta.env.VITE_DEV_PRIVATE_KEY, provider)
-    return { address: wallet.address }
-  }
-
-  const { signer } = await getBlockchainContext()
-  return { address: signer.address }
+  return delay({ address: '0x0000...0000' })
 }
