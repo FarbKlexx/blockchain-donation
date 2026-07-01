@@ -50,11 +50,6 @@ async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>
 }
 
-/** Simulates network/RPC latency so loading states behave like production. */
-function delay<T>(value: T, ms = 250): Promise<T> {
-  return new Promise((resolve) => setTimeout(() => resolve(value), ms))
-}
-
 // ── SOURCE 1: smart contract (ethers.js) ────────────────────────────────────
 // TODO(integration): replace these with ethers reads. The campaign list is
 // `DonationFactory.getProjects()` (an address[]); per campaign, read the
@@ -637,10 +632,9 @@ export interface CreateProjectPayload {
 }
 
 export interface CreateProjectResult {
-  /** Address of the newly deployed Donation contract. */
-  address: string
-  /** Creation transaction hash. */
-  txHash: string
+  address: string // Address of the newly deployed Donation contract
+  txHash: string // Creation transaction hash
+  id: string // Newly created project id
 }
 
 function mockContractAddress(): string {
@@ -720,33 +714,32 @@ export async function createProject(payload: CreateProjectPayload): Promise<Crea
     description: m.description,
   }))
 
-  // Schritt 2: Off-Chain Metadaten via REST-API speichern mit PARTIAL FAILURE HANDLING
-  try {
-    await fetchJson<{ status: string }>('/api/projects', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        address: deployedAddress,
-        title: payload.metadata.title,
-        summary: payload.metadata.summary,
-        category: payload.metadata.category,
-        image: payload.metadata.image,
-        description: payload.metadata.description,
-        verified: false,
-        milestones,
-        news: payload.metadata.news,
-      }),
-    })
-  } catch (apiError: any) {
-    // FEHLER-BEHANDLUNG: Contract existiert, aber DB-Eintrag schlug fehl!
-    console.error("CRITICAL CRASH: Contract deployed, but Backend Metadata Sync failed!", apiError)
-    throw new Error(
-      `Teilerfolg: Der Smart Contract wurde erfolgreich unter der Adresse "${deployedAddress}" aufgestellt (Tx: ${tx.hash}). ` +
-      `Das Speichern der Beschreibungstexte im Backend ist jedoch fehlgeschlagen. Bitte sichern Sie diese Adresse für den Support!`
-    )
-  }
+  const descriptionArray = typeof payload.metadata.description === 'string' 
+    ? [payload.metadata.description] 
+    : payload.metadata.description
 
-  return { address: deployedAddress, txHash: tx.hash }
+  // POST to backend
+  const response = await fetchJson<{ status: string; project_id: string }>('/api/projects', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      address: deployedAddress,
+      title: payload.metadata.title,
+      summary: payload.metadata.summary,
+      category: payload.metadata.category,
+      image: payload.metadata.image,
+      description: descriptionArray, // as array
+      verified: false,
+      milestones,
+      news: payload.metadata.news,
+    }),
+  })
+
+  return { 
+    address: deployedAddress, 
+    txHash: tx.hash, 
+    id: response.project_id
+  }
 }
 
 export interface WalletConnection {
