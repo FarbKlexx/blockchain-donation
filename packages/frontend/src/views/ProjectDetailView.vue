@@ -178,7 +178,7 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
               <AppIcon :name="goalReached ? 'circle-help' : 'lock'" :size="14" />
               {{
                 goalReached
-                  ? 'Nach Zielerreichung wird der erste Meilenstein ausgezahlt; Validatoren bestätigen jeden ausgezahlten Meilenstein und geben damit den nächsten frei.'
+                  ? 'Nach Zielerreichung stimmen die Validatoren über jeden Meilenstein ab – auch über den ersten. Erst nach Freigabe durch die Mehrheit werden die zugeordneten Mittel ausgezahlt.'
                   : 'Die Abstimmung über die Meilensteine beginnt erst, sobald das Finanzierungsziel erreicht ist.'
               }}
             </p>

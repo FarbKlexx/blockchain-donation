@@ -145,8 +145,8 @@ function deriveProjectStatus(c: ContractCampaign): ProjectStatus {
   return 'laufend'
 }
 
-/** Approvals needed to release the NEXT milestone: the smallest integer count
- *  that meets the majority `approvedCount/validators.length >= bps/10000`. */
+/** Approvals needed to release a milestone: the smallest integer count that
+ *  meets the majority `approvedCount/validators.length >= bps/10000`. */
 function requiredApprovals(validatorCount: number, majorityBps: number): number {
   if (validatorCount <= 0) return 0
   return Math.ceil((validatorCount * majorityBps) / 10000)
@@ -154,22 +154,21 @@ function requiredApprovals(validatorCount: number, majorityBps: number): number 
 
 /** Milestone presentation status, derived from the struct + lifecycle. Milestone
  *  funds are absolute on-chain (`amount`), so there is no allocation maths.
- *  Per the contract's voting model, the milestone validators are CURRENTLY
- *  voting on is the just-paid one (`currentMilestoneIndex - 1`), whose vote is
- *  not yet finished while the project is in Payout — that one is "in_progress".
- *  Any other paid milestone has its funds released → "completed"; an unpaid
- *  milestone is "pending". */
+ *  Voting model: EVERY milestone — including the first — must be approved by the
+ *  validators before its funds are released. The one validators are CURRENTLY
+ *  voting on is the milestone to be paid NEXT (`currentMilestoneIndex`), still
+ *  unpaid and with its vote unfinished while the project is in Payout — that one
+ *  is "in_progress"; approving it releases ITS OWN payout. A paid milestone has
+ *  its funds released → "completed"; any other unpaid milestone is "pending". */
 function deriveMilestoneStatus(
   ms: ContractCampaign['milestones'][number],
   index: number,
   c: ContractCampaign,
 ): MilestoneStatus {
-  if (ms.paid) {
-    const beingVotedOn =
-      c.currentStatus === 'Payout' && index === c.currentMilestoneIndex - 1 && !ms.votingFinished
-    return beingVotedOn ? 'in_progress' : 'completed'
-  }
-  return 'pending'
+  if (ms.paid) return 'completed'
+  const beingVotedOn =
+    c.currentStatus === 'Payout' && index === c.currentMilestoneIndex && !ms.votingFinished
+  return beingVotedOn ? 'in_progress' : 'pending'
 }
 
 // ── Merge: contract state (authoritative) enriched with backend metadata ─────
@@ -226,7 +225,9 @@ function mergeProject(c: ContractCampaign, m: ProjectMetadata): Project {
     // supplies title/desc. Lifecycle invariant (Spende → Stimme → Auszahlung):
     // a milestone's confirmations/status are only meaningful once raised >= goal
     // (Status === Payout) — validators cannot vote before the goal is reached.
-    // The detail view also gates this on the presentation side (`goalReached`).
+    // Every milestone, the first included, must then be approved before its funds
+    // are released. The detail view also gates this on the presentation side
+    // (`goalReached`).
     milestones: c.milestones.map((ms, i) => {
       const meta = m.milestones[i]
       return {
@@ -390,11 +391,12 @@ export interface VoteResult {
 }
 
 /**
- * Cast a validator's vote on the milestone currently up for a vote — the
- * just-paid one, `currentMilestoneIndex - 1` (approve = true, reject = false).
- * Approving it is what releases the NEXT milestone's payout. Validator-only and
- * only while voting is open — the contract enforces every precondition
- * (isValidator, Payout phase, milestone == currentMilestoneIndex - 1, voting not
+ * Cast a validator's vote on the milestone currently up for a vote — the one to
+ * be paid next, `currentMilestoneIndex` (approve = true, reject = false).
+ * Approving it is what releases THAT milestone's own payout — every milestone,
+ * including the first, must clear this vote before its funds go out. Validator-
+ * only and only while voting is open — the contract enforces every precondition
+ * (isValidator, Payout phase, milestone == currentMilestoneIndex, voting not
  * finished, deadline not passed, no duplicate vote); the UI only mirrors them.
  *
  * TODO(integration): the real write —
@@ -402,8 +404,8 @@ export interface VoteResult {
  *   await (await donation.voteMilestone(milestoneIndex, approve)).wait()
  * then RE-READ that milestone (approvedCount/rejectedCount/votingFinished) and
  * the project's currentStatus from chain — a single approval can flip the
- * project to Failed or unlock the next payout. The contract is the authority;
- * the frontend validator check is UX only.
+ * project to Failed or release this milestone's payout. The contract is the
+ * authority; the frontend validator check is UX only.
  *
  * [mock] Placeholder: no transaction is sent and no state is mutated.
  */
