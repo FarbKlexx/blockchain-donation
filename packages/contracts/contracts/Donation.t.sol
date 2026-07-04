@@ -155,7 +155,7 @@ contract DonationTest is Test {
     donation.payout(milestoneIndex);
 
     vm.expectEmit(true, false, false, true);
-    emit Donation.VoteSubmitted(validator, milestoneIndex, vote);
+    emit Donation.MilestoneVoteSubmitted(validator, milestoneIndex, vote);
 
     vm.prank(validator);
     donation.voteMilestone(milestoneIndex, vote);
@@ -192,7 +192,7 @@ contract DonationTest is Test {
     donation.payout(milestoneIndex);
 
     vm.expectEmit(true, false, false, true);
-    emit Donation.VoteSubmitted(validator, milestoneIndex, vote);
+    emit Donation.MilestoneVoteSubmitted(validator, milestoneIndex, vote);
   
     vm.expectEmit(false, false, false, true);
     emit Donation.StatusChanged(Donation.Status.Payout, Donation.Status.Failed, Donation.FailureReason.RejectedByValidators);
