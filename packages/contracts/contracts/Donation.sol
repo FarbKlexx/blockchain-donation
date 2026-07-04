@@ -34,12 +34,16 @@ contract Donation{
     ///makes check whether adress is a validator cheap and fast
     mapping(address => bool) public isValidator;
 
+    Milestone public projectSetup;
+    mapping(address => bool) public votesForProjectSetup;
+    mapping(address => bool) public hasVotedForProjectSetup;
+
     ///The Milestone taht will be paid out next
     uint256 public currentMilestoneIndex;
     Milestone[] public milestones;
 
     mapping(uint256 => mapping(address => bool)) public votesForMilestone;
-    mapping(uint256 => mapping(address => bool)) hasVoted;
+    mapping(uint256 => mapping(address => bool)) public hasVotedForMilestone;
 
     ///set whenever a milestone is paid out so that validators can vote until the deadline
     uint256 public milestoneVotingDeadline;
@@ -60,6 +64,7 @@ contract Donation{
     ///The Statius the project can be in
     enum Status{
         Funding,
+        ToBeApproved,
         Payout,
         Failed,
         Closed
@@ -82,7 +87,16 @@ contract Donation{
         uint256 amount
     );
 
-    event VoteSubmitted(
+    event ProjectVoteSubmitted(
+        address indexed validator,
+        bool approved
+    );
+
+    event ProjectVotingFinished(
+        bool approved
+    );
+
+    event MilestoneVoteSubmitted(
         address indexed validator,
         uint256 milestoneIndex,
         bool approved
@@ -167,6 +181,52 @@ contract Donation{
 
         if(totalDonations >= donationGoal){
             Status oldStatus = currentStatus;
+            currentStatus = Status.ToBeApproved;
+            emit StatusChanged(oldStatus, currentStatus, FailureReason.None);
+        }
+    }
+
+    function voteProjectSetup(bool vote) external isAllowedToVote onlyDuringToBeApproved(){
+        if(hasVotedForProjectSetup[msg.sender] == true){
+            bool lastVote = votesForProjectSetup[msg.sender];
+            require(lastVote != vote, "Same Vote was already made");
+
+            if(lastVote){
+                projectSetup.approvedCount--;
+            } else {
+                projectSetup.rejectedCount--;
+            }
+        }
+        else{
+            hasVotedForProjectSetup[msg.sender] = true;
+        }
+        votesForProjectSetup[msg.sender] = vote;
+
+        if (vote){
+            projectSetup.approvedCount++;
+        } else {
+            projectSetup.rejectedCount++;
+        }
+
+        emit ProjectVoteSubmitted(msg.sender, vote);
+
+        if(isVoteRejected(projectSetup.approvedCount, projectSetup.approvedCount + projectSetup.rejectedCount)){
+            projectSetup.votingFinished = true;
+            emit ProjectVotingFinished(false);
+            milestoneVotingDeadline = 0;
+
+            Status oldStatus = currentStatus;
+            currentStatus = Status.Failed;
+            emit StatusChanged(oldStatus, currentStatus, FailureReason.RejectedByValidators);
+
+            refundableBalance = address(this).balance;
+        }
+        else if(isVoteApproved(projectSetup.rejectedCount, projectSetup.approvedCount + projectSetup.rejectedCount)){
+            projectSetup.votingFinished = true;
+            emit ProjectVotingFinished(true);
+            milestoneVotingDeadline = 0;
+
+            Status oldStatus = currentStatus;
             currentStatus = Status.Payout;
             emit StatusChanged(oldStatus, currentStatus, FailureReason.None);
         }
@@ -176,7 +236,7 @@ contract Donation{
     ///If the necessary portion of validators vote against the milestone, the project fails.
     ///Can be called as long as the poll has not been decided. 
     function voteMilestone(uint milestoneIndex, bool vote) external isAllowedToVote onlyDuringPayout() isMilestone(milestoneIndex) isLastMilestone(milestoneIndex) MilestoneVotingOpen(milestoneIndex){
-        if(hasVoted[milestoneIndex][msg.sender] == true){
+        if(hasVotedForMilestone[milestoneIndex][msg.sender] == true){
             bool lastVote = votesForMilestone[milestoneIndex][msg.sender];
             require(lastVote != vote, "Same Vote was already made");
 
@@ -187,7 +247,7 @@ contract Donation{
             }
         }
         else{
-            hasVoted[milestoneIndex][msg.sender] = true;
+            hasVotedForMilestone[milestoneIndex][msg.sender] = true;
         }
         votesForMilestone[milestoneIndex][msg.sender] = vote;
 
@@ -197,7 +257,7 @@ contract Donation{
             milestones[milestoneIndex].rejectedCount++;
         }
 
-        emit VoteSubmitted(msg.sender, milestoneIndex, vote);
+        emit MilestoneVoteSubmitted(msg.sender, milestoneIndex, vote);
 
         if(isMilestoneRejected(milestoneIndex)){
             milestones[milestoneIndex].votingFinished = true;
@@ -359,6 +419,11 @@ contract Donation{
         _;
     }
 
+    modifier onlyDuringToBeApproved(){
+        require(currentStatus == Status.ToBeApproved, "Only possible while Project Approval");
+        _;
+    }
+
     modifier onlyDuringPayout() {
         require(currentStatus == Status.Payout, "Only possible in Payout Phase");
         _;
@@ -435,8 +500,19 @@ contract Donation{
         return calculatePercentageInBps(milestones[milestoneIndex].approvedCount, validators.length) >= neededVoteMajorityInBps;        
     }
 
+
     ///Returns whether the Milestone has been rejected.
     function isMilestoneRejected(uint256 milestoneIndex) internal view returns (bool) {
         return calculatePercentageInBps(milestones[milestoneIndex].rejectedCount, validators.length) > basepoints - neededVoteMajorityInBps;        
+    }
+
+    ///Returns whether the Vote has been approved.
+    function isVoteApproved(uint256 approvedCount, uint256 totalVotes) internal pure returns (bool) {
+        return calculatePercentageInBps(approvedCount, totalVotes) >= neededVoteMajorityInBps;        
+    }
+
+    ///Returns whether the Vote has been rejected.
+    function isVoteRejected(uint256 rejectedCount, uint256 totalVotes) internal pure returns (bool) {
+        return calculatePercentageInBps(rejectedCount, totalVotes) > basepoints - neededVoteMajorityInBps;        
     }
 }
