@@ -64,16 +64,22 @@ const router = createRouter({
       component: () => import('@/views/CouponView.vue'),
     },
     {
-      // The e-mail claim-link target. Auth = this token (right page) + wallet
-      // (rightful owner); the view drives the login + reveal.
-      path: '/gutschein/:token',
-      name: 'coupon-claim',
-      component: () => import('@/views/CouponClaimView.vue'),
-      props: true,
+      // Create your own coupons (any connected wallet; the view itself prompts
+      // login when there is no session, so it stays reachable to explain the flow).
+      path: '/gutscheine-erstellen',
+      name: 'coupon-create',
+      component: () => import('@/views/CouponCreateView.vue'),
+    },
+    {
+      // The creator's coupons + private keys. Reachable without a session — the
+      // view shows a login prompt — so a hard refresh here is not a dead end.
+      path: '/meine-gutscheine',
+      name: 'my-coupons',
+      component: () => import('@/views/MyCouponsView.vue'),
     },
     {
       // Stand-in merchant checkout where a coupon is redeemed (anyone with the
-      // key). Optional ?id=&key= prefill from the claim page.
+      // key). Optional ?id=&key= prefill from the reveal card.
       path: '/gutschein-einloesen',
       name: 'coupon-redeem',
       component: () => import('@/views/CouponRedeemView.vue'),

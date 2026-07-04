@@ -111,6 +111,24 @@ onUnmounted(() => window.removeEventListener('click', closeMenu))
         >
           Meine Projekte
         </RouterLink>
+        <div class="menu__sep" role="separator" />
+        <RouterLink
+          :to="{ name: 'coupon-create' }"
+          class="menu__item"
+          role="menuitem"
+          @click="closeMenu"
+        >
+          Gutscheine erstellen
+        </RouterLink>
+        <RouterLink
+          :to="{ name: 'my-coupons' }"
+          class="menu__item"
+          role="menuitem"
+          @click="closeMenu"
+        >
+          Meine Gutscheine
+        </RouterLink>
+        <div class="menu__sep" role="separator" />
         <button class="menu__item menu__item--button" type="button" role="menuitem" @click="logout">
           Abmelden
         </button>
@@ -248,5 +266,11 @@ onUnmounted(() => window.removeEventListener('click', closeMenu))
 
 .menu__item--button {
   color: var(--bd-grey-text);
+}
+
+.menu__sep {
+  height: 1px;
+  margin: 6px 0;
+  background: var(--bd-divider);
 }
 </style>

@@ -7,9 +7,9 @@ import CouponHero from '@/components/coupon/CouponHero.vue'
 import CouponSteps from '@/components/coupon/CouponSteps.vue'
 import CouponTable from '@/components/coupon/CouponTable.vue'
 
-// Coupon landing page — mirrors the Figma `gutscheine-coupon-page`: subscribe
-// hero, "how it works", and the public on-chain coupon table. Reads everything
-// through couponsService (the integration seam).
+// Coupon landing page: a "create your own coupons" hero, "how it works", and the
+// public on-chain coupon table (every coupon anyone created, since the ledger is
+// public). Reads everything through couponsService (the integration seam).
 const coupons = ref<Coupon[]>([])
 const loading = ref(true)
 
@@ -37,16 +37,16 @@ onMounted(load)
       </p>
     </header>
 
-    <CouponHero @subscribed="load" />
+    <CouponHero />
 
     <CouponSteps />
 
     <section class="coupons__list">
       <div class="coupons__list-head">
-        <h2 class="coupons__list-title">Aktive Gutscheine</h2>
+        <h2 class="coupons__list-title">Alle Gutscheine</h2>
         <p class="coupons__list-lead">
-          Alle aktiven Gutscheine sind öffentlich auf der Blockchain einsehbar. Nur der Inhaber des
-          privaten Schlüssels kann den Gutschein tatsächlich einlösen.
+          Alle Gutscheine sind öffentlich auf der Blockchain einsehbar. Nur wer den privaten
+          Schlüssel besitzt, kann den Gutschein tatsächlich einlösen.
         </p>
       </div>
 

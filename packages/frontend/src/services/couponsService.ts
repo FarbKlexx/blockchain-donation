@@ -8,9 +8,9 @@
 // Two sources mirror the production architecture (same split as projectsService):
 //
 //   SOURCE 1  src/data/couponContractData.json  → the Coupon contract (ethers.js)
-//             PUBLIC on-chain state: couponAddress, owner, value, redeemed, …
+//             PUBLIC on-chain state: couponAddress, creator, value, redeemed, …
 //   SOURCE 2  src/data/couponSecrets.mock.ts     → backend REST API (off-chain)
-//             PII + SECRETS: e-mail, the private key, the raw claim token
+//             SECRETS: the coupon private key (revealed only to its creator)
 //
 // HEUTE (today): SOURCE 1 = JSON mock; SOURCE 2 = a DEV mock the user will swap
 // for a real backend later. The reads/writes below are already async/parallel
@@ -20,30 +20,33 @@
 // AUTHENTICATED `fetch('/api/coupons/...')`. The merge, types, components and
 // views stay put. All swap points are tagged `TODO(integration)`.
 //
-// THE CRYPTO MODEL (see types/coupon-sources.ts): a coupon is an ECDSA keypair.
-// The keypair ADDRESS is public (on-chain `couponAddress`); the PRIVATE KEY is
-// the secret code, off-chain, revealed only after auth. Redemption proves
-// possession of the key WITHOUT transmitting it: sign a challenge, recover the
-// signer (`ecrecover`), require it to equal `couponAddress`. `redeemCoupon`
-// below does exactly that client-side (sign + verifyMessage) as a faithful mock.
+// CREATION MODEL (see types/coupon-sources.ts): coupons are NOT issued by the
+// site. ANY wallet-connected user creates their OWN coupons and PAYS the contract
+// (escrowed discount value + a creation fee). The creator then holds the private
+// keys and distributes them OFF the site however they like — there is no e-mail
+// or claim flow. `createCoupons`/`listMyCoupons` below model that.
+//
+// THE CRYPTO MODEL: a coupon is an ECDSA keypair. The keypair ADDRESS is public
+// (on-chain `couponAddress`); the PRIVATE KEY is the secret code, off-chain,
+// revealed only to the creator after auth. Redemption proves possession of the
+// key WITHOUT transmitting it: sign a challenge, recover the signer
+// (`ecrecover`), require it to equal `couponAddress`. `redeemCoupon` below does
+// exactly that client-side (sign + verifyMessage) as a faithful mock.
 // ─────────────────────────────────────────────────────────────────────────
 
-import { Wallet, keccak256, toUtf8Bytes, verifyMessage } from 'ethers'
+import { Wallet, verifyMessage } from 'ethers'
 import couponContractData from '@/data/couponContractData.json'
 import { COUPON_SECRETS } from '@/data/couponSecrets.mock'
 import type { ContractCoupon, CouponSecret } from '@/types/coupon-sources'
-import type { Coupon, CouponStatus } from '@/types/coupon'
+import type { Coupon, CouponStatus, MyCoupon } from '@/types/coupon'
 import { explorerAddressUrl } from '@/utils/address'
 import { NATIVE_CURRENCY } from '@/utils/amount'
-import { COUPON_NOMINAL_EUR, ethToEur, eurToEth } from '@/utils/coupon'
+import { couponCreationCost, ethToEur, eurToEth } from '@/utils/coupon'
 
-const ZERO_ADDRESS = '0x' + '0'.repeat(40)
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-// In-memory copy of the on-chain coupon state (mutated by subscribe/claim/redeem
-// to simulate confirmed transactions changing chain state).
+// In-memory copy of the on-chain coupon state (mutated by create/redeem to
+// simulate confirmed transactions changing chain state).
 const coupons = (couponContractData as { coupons: ContractCoupon[] }).coupons
-// In-memory copy of the off-chain secret store (subscribe appends to it).
+// In-memory copy of the off-chain secret store (create appends to it).
 const secrets: CouponSecret[] = [...COUPON_SECRETS]
 
 /** Simulates network/RPC latency so loading states behave like production. */
@@ -51,15 +54,11 @@ function delay<T>(value: T, ms = 250): Promise<T> {
   return new Promise((resolve) => setTimeout(() => resolve(value), ms))
 }
 
-function isZero(address: string): boolean {
-  return address.toLowerCase() === ZERO_ADDRESS
-}
-
 // ── SOURCE 1: smart contract (ethers.js) ────────────────────────────────────
 // TODO(integration): replace these with ethers reads. The coupon list is
 // `CouponFactory.getCoupons()`; per coupon read the `Coupon` getters
-// (couponAddress/owner/value/redeemed/redeemedAt/claimTokenHash/createdAt).
-// Coupons are keyed by their on-chain `id`.
+// (couponAddress/creator/value/redeemed/redeemedAt/createdAt). Coupons are keyed
+// by their on-chain `id`.
 
 async function fetchCoupons(): Promise<ContractCoupon[]> {
   return delay(coupons)
@@ -69,31 +68,31 @@ async function fetchCouponById(id: number): Promise<ContractCoupon | null> {
   return delay(coupons.find((c) => c.id === id) ?? null)
 }
 
-// ── SOURCE 2: backend REST API (off-chain PII + secrets) ─────────────────────
+// ── SOURCE 2: backend REST API (off-chain secrets) ───────────────────────────
 // AUTHENTICATED endpoints in production — the backend must verify the caller
-// before returning a secret (the frontend checks here are UX only). Today these
-// resolve from the DEV mock; the shapes match the planned routes 1:1.
+// controls the coupon's `creator` wallet before returning a private key (the
+// frontend checks here are UX only). Today these resolve from the DEV mock; the
+// shapes match the planned routes 1:1.
 
-async function fetchSecretByToken(token: string): Promise<CouponSecret | null> {
-  // TODO(integration): GET /api/coupons/by-token/:token — the backend stores the
-  // raw token and resolves it to the coupon's secret record.
-  return delay(secrets.find((s) => s.token === token) ?? null)
+async function fetchSecretById(id: number): Promise<CouponSecret | null> {
+  // TODO(integration): GET /api/coupons/:id/reveal (authenticated) — the backend
+  // returns the private key only after verifying the caller is the creator.
+  return delay(secrets.find((s) => s.id === id) ?? null)
 }
 
 // ── Derivations: raw on-chain fields → the UI model ──────────────────────────
 
-/** Status from the on-chain `owner` + `redeemed` — never stored as a field. */
+/** Status from the on-chain `redeemed` flag — never stored as a field. A coupon
+ *  is usable ("active") from creation until it is redeemed. */
 function deriveCouponStatus(c: ContractCoupon): CouponStatus {
-  if (c.redeemed) return 'redeemed'
-  if (!isZero(c.owner)) return 'active'
-  return 'pending'
+  return c.redeemed ? 'redeemed' : 'active'
 }
 
 function mergeCoupon(c: ContractCoupon): Coupon {
   return {
     id: c.id,
     couponAddress: c.couponAddress,
-    owner: isZero(c.owner) ? null : c.owner,
+    creator: c.creator,
     status: deriveCouponStatus(c),
     value: c.value,
     valueEur: ethToEur(c.value),
@@ -118,6 +117,34 @@ export async function listCoupons(): Promise<Coupon[]> {
 export async function getCoupon(id: number): Promise<Coupon | null> {
   const c = await fetchCouponById(id)
   return c ? mergeCoupon(c) : null
+}
+
+/**
+ * List the coupons CREATED by one wallet, WITH their private keys — the data
+ * behind the "Meine Gutscheine" page. The creator is authenticated (they control
+ * the wallet), so the secret code is joined in and shown; the public `listCoupons`
+ * never carries it. Newest first.
+ *
+ * TODO(integration): read the creator's coupons from chain (filter by `creator`
+ * or a `CouponFactory.getCouponsByCreator(addr)` view), then fetch each private
+ * key from the AUTHENTICATED backend (`GET /api/coupons/:id/reveal` with a SIWE
+ * session proving control of `creator`). The backend — not this filter — is the
+ * security boundary.
+ */
+export async function listMyCoupons(creatorAddress: string): Promise<MyCoupon[]> {
+  const a = creatorAddress.toLowerCase()
+  const list = await fetchCoupons()
+  const mine = [...list]
+    .filter((c) => c.creator.toLowerCase() === a)
+    .sort((c1, c2) => c2.createdAt - c1.createdAt)
+  // Reveal each private key from SOURCE 2 (authenticated per coupon in production).
+  const withKeys = await Promise.all(
+    mine.map(async (c) => {
+      const secret = await fetchSecretById(c.id)
+      return { ...mergeCoupon(c), privateKey: secret?.privateKey ?? '' }
+    }),
+  )
+  return withKeys
 }
 
 // ── Mutations (write transactions) ───────────────────────────────────────────
@@ -153,130 +180,106 @@ function assertLocalSigner(): void {
   }
 }
 
-export interface SubscribeResult {
-  /** New on-chain coupon id (part 1 of the eventual code). */
-  couponId: number
-  /** The hashed claim link the backend would e-mail (the ClaimView route). */
-  claimUrl: string
-  /** [demo only] echoed so the prototype can surface the link without an inbox. */
-  email: string
-}
-
-/**
- * Subscribe to the newsletter → mint a coupon.
- *
- * TODO(integration): this is a BACKEND-orchestrated write. The backend would:
- *   1) generate the coupon keypair (address + private key);
- *   2) deploy/register it on-chain, e.g.
- *        const factory = CouponFactory__factory.connect(VITE_COUPON_FACTORY, signer)
- *        const token = crypto secret
- *        await (await factory.createCoupon(
- *          couponWallet.address,            // the public key
- *          parseEther(valueEth),            // the discount value (wei)
- *          keccak256(toUtf8Bytes(token)),   // claimTokenHash
- *        )).wait()
- *   3) persist { id, email, privateKey (encrypted), token } off-chain;
- *   4) e-mail the subscriber a link to /gutschein/<token>.
- * The private key is NOT returned here — it is revealed only after the owner
- * authenticates (claimCoupon).
- *
- * [mock] Generates a real keypair client-side and appends to both in-memory
- * stores so the claim → redeem demo works end to end.
- */
-export async function subscribeNewsletter(email: string): Promise<SubscribeResult> {
-  assertLocalSigner()
-
-  const trimmed = email.trim()
-  if (!EMAIL_RE.test(trimmed)) throw new Error('Bitte eine gültige E-Mail-Adresse eingeben.')
-
-  const couponWallet = Wallet.createRandom()
-  const id = coupons.reduce((max, c) => Math.max(max, c.id), 0) + 1
-  const token = crypto.randomUUID()
-
-  const newCoupon: ContractCoupon = {
-    id,
-    couponAddress: couponWallet.address,
-    owner: ZERO_ADDRESS, // unclaimed until the link + wallet bind an owner
-    value: eurToEth(COUPON_NOMINAL_EUR),
-    redeemed: false,
-    redeemedAt: 0,
-    claimTokenHash: keccak256(toUtf8Bytes(token)),
-    createdAt: Math.floor(Date.now() / 1000),
-  }
-  coupons.push(newCoupon)
-  secrets.push({ id, email: trimmed, privateKey: couponWallet.privateKey, token })
-
-  return delay({ couponId: id, claimUrl: `/gutschein/${token}`, email: trimmed })
-}
-
-export interface ClaimResult {
-  /** Part 1 of the redeem code. */
-  couponId: number
-  /** Part 2 of the redeem code — the secret private key (revealed only now). */
-  privateKey: string
-  /** The public coupon address (for display / verification). */
+/** One freshly created coupon, returned to its creator WITH the private key so
+ *  they can immediately copy/distribute it. */
+export interface CreatedCoupon {
+  id: number
   couponAddress: string
+  /** The secret code (part 2). Shown to the creator now; distributed off-site. */
+  privateKey: string
   value: number
   valueEur: number
-  /** Whether the coupon is already spent — the reveal UI shows it as redeemed
-   *  (no live "einlösen" CTA) instead of as freshly usable. */
-  redeemed: boolean
+}
+
+export interface CreateCouponsResult {
+  coupons: CreatedCoupon[]
+  count: number
+  /** What the creator paid the contract, broken down (escrow + fee). */
+  cost: ReturnType<typeof couponCreationCost>
+}
+
+export interface CreateCouponsParams {
+  /** How many coupons to create in this batch (>= 1). */
+  count: number
+  /** Discount value per coupon, in EUR nominal (converted to native coin). */
+  valueEur: number
 }
 
 /**
- * Claim a coupon from an e-mail link: authenticate, bind the owner, reveal code.
+ * Create a batch of coupons as the connected wallet — the CREATION flow. Open to
+ * ANY connected account (no role required); the caller becomes the on-chain
+ * `creator`. Creating costs money: the contract is paid the escrowed discount
+ * value for every coupon PLUS a per-coupon creation fee (see couponCreationCost).
+ * The private keys are returned so the creator can distribute them off-site; the
+ * site does no distribution.
  *
- * Authentication is TWO factors, exactly as specified:
- *   • the LINK proves "right page" — its token must hash to the on-chain
- *     `claimTokenHash`;
- *   • the WALLET proves "rightful owner" — on first claim the link authorizes
- *     binding `owner = msg.sender`; on later visits the wallet must equal the
- *     already-bound owner.
- * Only then is the private key revealed.
+ * TODO(integration): this is an on-chain write paid by the creator's signer:
+ *   const factory = CouponFactory__factory.connect(VITE_COUPON_FACTORY, signer)
+ *   const value = parseEther(valueEth)
+ *   // one call minting `count` coupons; msg.value = total cost (escrow + fee):
+ *   const tx = await factory.createCoupons(
+ *     couponWallets.map((w) => w.address),   // the public keys (generated client-side)
+ *     value,
+ *     { value: parseEther(String(cost.totalEth)) },
+ *   )
+ *   const ids = <read the CouponCreated events from receipt>
+ *   // then persist the private keys off-chain, keyed by id + creator, behind an
+ *   // AUTHENTICATED endpoint that only ever reveals them back to that creator.
+ * The keypairs are generated CLIENT-SIDE so the private key need never leave the
+ * creator; only the addresses go on-chain.
  *
- * TODO(integration):
- *   // on-chain: bind the owner trustlessly (the contract checks the token hash)
- *   const coupon = Coupon__factory.connect(VITE_COUPON_ADDRESS, signer)
- *   await (await coupon.claim(token)).wait()   // sets owner = msg.sender if unbound
- *   // off-chain: the AUTHENTICATED backend returns the private key only after
- *   // verifying the caller controls `owner` (e.g. a SIWE session):
- *   const { privateKey } = await fetch(`/api/coupons/${id}/reveal`, { ... }).then(r => r.json())
- * The frontend checks here are UX only; the contract + backend are the authority.
- *
- * [mock] Verifies the token hash, binds/checks the owner in memory, returns the
- * secret from the SOURCE 2 mock.
+ * [mock] Generates real keypairs client-side and appends to both in-memory stores
+ * (creator = the caller) so "Meine Gutscheine" and the redeem demo work end to end.
  */
-export async function claimCoupon(token: string, walletAddress: string): Promise<ClaimResult> {
+export async function createCoupons(
+  creatorAddress: string,
+  params: CreateCouponsParams,
+): Promise<CreateCouponsResult> {
   assertLocalSigner()
 
-  // 1) resolve the link's token → its coupon (SOURCE 2, then SOURCE 1).
-  const secret = await fetchSecretByToken(token)
-  const coupon = secret && coupons.find((c) => c.id === secret.id)
-  if (!secret || !coupon) throw new Error('Ungültiger oder abgelaufener Gutschein-Link.')
-
-  // 2) the LINK proves "right page": its token must match the on-chain hash.
-  if (keccak256(toUtf8Bytes(token)) !== coupon.claimTokenHash) {
-    throw new Error('Der Link ist ungültig.')
+  const count = Math.trunc(params.count)
+  if (!Number.isInteger(count) || count < 1) {
+    throw new Error('Bitte eine gültige Anzahl (mindestens 1) angeben.')
+  }
+  if (count > 50) {
+    throw new Error('Es können höchstens 50 Gutscheine auf einmal erstellt werden.')
+  }
+  if (!(params.valueEur > 0)) {
+    throw new Error('Bitte einen Rabattwert größer als 0 angeben.')
   }
 
-  // 3) the WALLET proves "rightful owner".
-  if (isZero(coupon.owner)) {
-    // First claim — the link authorizes binding this wallet as the owner.
-    coupon.owner = walletAddress
-  } else if (coupon.owner.toLowerCase() !== walletAddress.toLowerCase()) {
-    throw new Error('Dieser Gutschein gehört bereits einer anderen Wallet.')
+  const valueEth = eurToEth(params.valueEur)
+  let nextId = coupons.reduce((max, c) => Math.max(max, c.id), 0) + 1
+  const createdAt = Math.floor(Date.now() / 1000)
+
+  const created: CreatedCoupon[] = []
+  for (let i = 0; i < count; i++) {
+    const couponWallet = Wallet.createRandom()
+    const id = nextId++
+    const newCoupon: ContractCoupon = {
+      id,
+      couponAddress: couponWallet.address,
+      creator: creatorAddress,
+      value: valueEth,
+      redeemed: false,
+      redeemedAt: 0,
+      createdAt,
+    }
+    coupons.push(newCoupon)
+    secrets.push({ id, privateKey: couponWallet.privateKey })
+    created.push({
+      id,
+      couponAddress: couponWallet.address,
+      privateKey: couponWallet.privateKey,
+      value: valueEth,
+      valueEur: params.valueEur,
+    })
   }
 
-  // 4) reveal the code (private key) — only now, after both factors passed. A
-  // spent coupon still reveals (the owner may want their code) but is flagged
-  // redeemed so the UI does not present it as usable.
   return delay({
-    couponId: coupon.id,
-    privateKey: secret.privateKey,
-    couponAddress: coupon.couponAddress,
-    value: coupon.value,
-    valueEur: ethToEur(coupon.value),
-    redeemed: coupon.redeemed,
+    coupons: created,
+    count,
+    cost: couponCreationCost(count, valueEth),
   })
 }
 

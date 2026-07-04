@@ -4,10 +4,10 @@ import { RouterLink } from 'vue-router'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { formatEth, formatEur } from '@/utils/coupon'
 
-// Reveals the redeem code AFTER a successful claim. The code is two parts:
-//   1) the coupon ID, 2) the private key (the secret).
-// Anyone holding both can redeem — so this is shown only to an authenticated
-// owner and framed as a secret to guard.
+// Reveals a coupon's redeem code to its CREATOR (create success + "Meine
+// Gutscheine"). The code is two parts: 1) the coupon ID, 2) the private key (the
+// secret). Anyone holding both can redeem — so it is framed as a secret to guard
+// and to distribute deliberately.
 const props = defineProps<{
   couponId: number
   privateKey: string
@@ -39,7 +39,7 @@ async function copy(field: string, text: string) {
       <span v-if="props.redeemed" class="reveal__badge reveal__badge--redeemed">
         Bereits eingelöst
       </span>
-      <span v-else class="reveal__badge"><AppIcon name="check" :size="16" /> Gutschein freigeschaltet</span>
+      <span v-else class="reveal__badge"><AppIcon name="check" :size="16" /> Gutscheincode</span>
       <span class="reveal__value">
         {{ formatEur(props.valueEur) }}
         <small>≈ {{ formatEth(props.value) }}</small>

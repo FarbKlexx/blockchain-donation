@@ -1,18 +1,18 @@
 <script setup lang="ts">
-// Static "Wie es funktioniert" explainer — three numbered steps, straight from
-// the Figma. No data/logic; purely informational.
+// Static "Wie es funktioniert" explainer — three numbered steps. No data/logic;
+// purely informational.
 const steps = [
   {
-    title: 'E-Mail eingeben',
-    body: 'Tragen Sie Ihre E-Mail-Adresse ein und bestätigen Sie die Anmeldung zum Newsletter.',
+    title: 'Wallet verbinden & erstellen',
+    body: 'Melden Sie sich mit Ihrer Wallet an und legen Sie fest, wie viele Gutscheine mit welchem Rabattwert Sie erstellen möchten.',
   },
   {
-    title: 'Privaten Schlüssel erhalten',
-    body: 'Wir senden Ihnen einen kryptografischen privaten Schlüssel per E-Mail zu.',
+    title: 'An den Contract zahlen',
+    body: 'Beim Erstellen zahlen Sie den hinterlegten Rabattwert plus eine Gebühr an den Smart Contract. Sie erhalten dafür die privaten Schlüssel.',
   },
   {
-    title: 'Beim Kauf einlösen',
-    body: 'Geben Sie den Schlüssel beim Checkout ein. Der Rabatt wird sofort in ETH abgezogen.',
+    title: 'Schlüssel verteilen & einlösen',
+    body: 'Sie verteilen die Schlüssel selbst – wie und an wen Sie möchten. Wer einen Schlüssel besitzt, kann ihn beim Kauf einlösen; der Rabatt wird in ETH abgezogen.',
   },
 ]
 </script>

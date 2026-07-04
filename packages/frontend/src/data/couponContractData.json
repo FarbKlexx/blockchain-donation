@@ -1,54 +1,49 @@
 {
-  "_comment": "MOCK of SOURCE 1 for the COUPON subsystem: the PUBLIC on-chain coupon state, shaped to map 1:1 onto a future Coupon / CouponFactory contract (no contract exists yet — this subsystem is frontend-only for now). The frontend would read these via ethers.js: the coupon list = CouponFactory.getCoupons(); per coupon the getters (couponAddress, owner, value, redeemed, redeemedAt, claimTokenHash, createdAt). `value` is the chain's NATIVE coin and is shown as a human-readable whole-coin number (on-chain it is wei, converted via parseEther/formatEther at the ethers boundary) — same convention as contractData.json. `couponAddress` is the coupon keypair's ADDRESS (the 'public key'); redemption verifies a signature against it via ecrecover, so the PRIVATE key is never on-chain. Joined to the off-chain secret store (couponSecrets.mock.ts) by `id`. Anything the UI shows that looks computed is DERIVED in couponsService: status (pending/active/redeemed) from owner+redeemed; the EUR nominal from value x the placeholder rate; the explorer URL + short address from couponAddress; the 'Erstellt' date from createdAt. owner = 0x000...000 means unclaimed (Ausstehend). The addresses below are REAL generated keypair addresses whose private keys live in couponSecrets.mock.ts, so the claim->reveal->redeem demo actually verifies end to end. The pre-claimed coupons (#1-#4) are deliberately owned by wallets that are NOT selectable login personas, so the ownership gate is honest: the claim demo runs through the PENDING coupon #5 (token DEMO-CLAIM-TOKEN-5) — the first wallet to open that link becomes its owner — while opening an already-owned coupon's link shows the 'belongs to another wallet' rejection.",
+  "_comment": "MOCK of SOURCE 1 for the COUPON subsystem: the PUBLIC on-chain coupon state, shaped to map 1:1 onto a future Coupon / CouponFactory contract (no contract exists yet — this subsystem is frontend-only for now). The frontend would read these via ethers.js: the coupon list = CouponFactory.getCoupons(); per coupon the getters (couponAddress, creator, value, redeemed, redeemedAt, createdAt). `value` is the chain's NATIVE coin and is shown as a human-readable whole-coin number (on-chain it is wei, converted via parseEther/formatEther at the ethers boundary) — same convention as contractData.json. `couponAddress` is the coupon keypair's ADDRESS (the 'public key'); redemption verifies a signature against it via ecrecover, so the PRIVATE key is never on-chain. Joined to the off-chain secret store (couponSecrets.mock.ts) by `id`. CREATION MODEL: coupons are NOT issued by the site — any wallet creates its OWN coupons and PAYS the contract (escrowed discount value + a creation fee); the `creator` is that wallet, and it distributes the private keys off-site however it likes. Anything the UI shows that looks computed is DERIVED in couponsService: status (active/redeemed) from `redeemed`; the EUR nominal from value x the placeholder rate; the explorer URL + short address from couponAddress; the 'Erstellt' date from createdAt. The addresses below are REAL generated keypair addresses whose private keys live in couponSecrets.mock.ts, so the create->reveal->redeem demo actually verifies end to end. The `creator`s map onto the DEV login personas (services/mockUsers.ts) so 'Meine Gutscheine' is populated: the 'Projektersteller' persona (0xd4e5…) created #1-#3, the 'Spender & Validator' persona (0x12b9…) created #4, and the 'Normaler Nutzer' persona (0x00…01) created #5 — demonstrating that coupon creation needs no donation role, just a connected wallet. Coupon #1 is active with a known key, so it is the natural redeem-demo target.",
   "coupons": [
     {
       "id": 1,
       "couponAddress": "0xf91eDa2d5b829B9BfE36a54757ce8a6B5cBb4c75",
-      "owner": "0x55aE973545999a41a49b309730D8C68d241FFede",
+      "creator": "0xd4e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d",
       "value": 0.0025,
       "redeemed": false,
       "redeemedAt": 0,
-      "claimTokenHash": "0x2cbbf05bac76ace133fbd9b8d40f904f53eab7916dc8ba12ac8cede89355008d",
       "createdAt": 1773309600
     },
     {
       "id": 2,
       "couponAddress": "0x33135b37f5E91514E5a69975cd1e64e08015e5d5",
-      "owner": "0x35680675eC2dd1451282C2c77AD15dC2EAc7e7e9",
+      "creator": "0xd4e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d",
       "value": 0.0025,
       "redeemed": false,
       "redeemedAt": 0,
-      "claimTokenHash": "0xbdeaa0846d0c1a035b8232ae788c41a3fdca3e847f297754bf35b0553442ee21",
       "createdAt": 1773223200
     },
     {
       "id": 3,
       "couponAddress": "0x20F4cf5082ef1c13E3955799114A34a4a81fAe55",
-      "owner": "0x8Bd6D2E9cda2d028cbb014F789D3e464ac453EdE",
+      "creator": "0xd4e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d",
       "value": 0.0025,
-      "redeemed": false,
-      "redeemedAt": 0,
-      "claimTokenHash": "0x9e366856f0e3ccea80f20d691f68bcb4cc4ce395dbeab5eea2155c13b9163082",
+      "redeemed": true,
+      "redeemedAt": 1773280800,
       "createdAt": 1773136800
     },
     {
       "id": 4,
       "couponAddress": "0xC053028083c62c2a7a63288aCa4d5e35fe0b8844",
-      "owner": "0x8de2b5aE7407C436dca931Eda30D56CC01fC3356",
+      "creator": "0x12b9f3a7c1e5d8b04a6f2c9e7b1d3a5f8c0e2b34",
       "value": 0.0025,
-      "redeemed": true,
-      "redeemedAt": 1773050400,
-      "claimTokenHash": "0x3ea63c196617cf021514e173f05c24dfd7067969e2c0cb40feea76b23b737759",
+      "redeemed": false,
+      "redeemedAt": 0,
       "createdAt": 1772964000
     },
     {
       "id": 5,
       "couponAddress": "0x099CfF9fEA4C4D19784A04F5ADcAe9AF43eDf539",
-      "owner": "0x0000000000000000000000000000000000000000",
+      "creator": "0x0000000000000000000000000000000000000001",
       "value": 0.0025,
       "redeemed": false,
       "redeemedAt": 0,
-      "claimTokenHash": "0x8d14ebcf60014cd2c5788974c154c2eef4242a3463e6e4150aaae2e0ca8f1d00",
       "createdAt": 1773396000
     }
   ]
