@@ -46,9 +46,9 @@ contract Donation{
     mapping(uint256 => mapping(address => bool)) public hasVotedForMilestone;
 
     ///set whenever a milestone is paid out so that validators can vote until the deadline
-    uint256 public milestoneVotingDeadline;
+    uint256 public votingDeadline;
     ///standard duration for how long can be voted after a milestone is paid out
-    uint256 constant milestoneVotingDuration = 182 days;
+    uint256 constant votingDuration = 182 days;
 
     struct Milestone{
         uint256 amount;
@@ -180,13 +180,14 @@ contract Donation{
         emit DonationReceived(donor, donation);
 
         if(totalDonations >= donationGoal){
+            votingDeadline = block.timestamp + votingDuration;
             Status oldStatus = currentStatus;
             currentStatus = Status.ToBeApproved;
             emit StatusChanged(oldStatus, currentStatus, FailureReason.None);
         }
     }
 
-    function voteProjectSetup(bool vote) external isAllowedToVote onlyDuringToBeApproved(){
+    function voteProjectSetup(bool vote) external isAllowedToVote onlyDuringToBeApproved() ProjectSetupVotingOpen(){
         if(hasVotedForProjectSetup[msg.sender] == true){
             bool lastVote = votesForProjectSetup[msg.sender];
             require(lastVote != vote, "Same Vote was already made");
@@ -210,10 +211,11 @@ contract Donation{
 
         emit ProjectVoteSubmitted(msg.sender, vote);
 
-        if(isVoteRejected(projectSetup.approvedCount, projectSetup.approvedCount + projectSetup.rejectedCount)){
+        //if(isVoteRejected(projectSetup.rejectedCount, projectSetup.approvedCount + projectSetup.rejectedCount)){
+        if(isVoteRejected(projectSetup.rejectedCount, validators.length)){
             projectSetup.votingFinished = true;
             emit ProjectVotingFinished(false);
-            milestoneVotingDeadline = 0;
+            votingDeadline = 0;
 
             Status oldStatus = currentStatus;
             currentStatus = Status.Failed;
@@ -221,10 +223,11 @@ contract Donation{
 
             refundableBalance = address(this).balance;
         }
-        else if(isVoteApproved(projectSetup.rejectedCount, projectSetup.approvedCount + projectSetup.rejectedCount)){
+        //else if(isVoteApproved(projectSetup.approvedCount, projectSetup.approvedCount + projectSetup.rejectedCount)){
+        else if(isVoteApproved(projectSetup.approvedCount, validators.length)){
             projectSetup.votingFinished = true;
             emit ProjectVotingFinished(true);
-            milestoneVotingDeadline = 0;
+            votingDeadline = 0;
 
             Status oldStatus = currentStatus;
             currentStatus = Status.Payout;
@@ -235,7 +238,7 @@ contract Donation{
     ///Can be called by validators to vote on the last milestone that was paid out in order to enable the payout of the next milestone.
     ///If the necessary portion of validators vote against the milestone, the project fails.
     ///Can be called as long as the poll has not been decided. 
-    function voteMilestone(uint milestoneIndex, bool vote) external isAllowedToVote onlyDuringPayout() isMilestone(milestoneIndex) isLastMilestone(milestoneIndex) MilestoneVotingOpen(milestoneIndex){
+    function voteMilestone(uint milestoneIndex, bool vote) external isAllowedToVote onlyDuringPayout() isLastMilestone(milestoneIndex) MilestoneVotingOpen(milestoneIndex){
         if(hasVotedForMilestone[milestoneIndex][msg.sender] == true){
             bool lastVote = votesForMilestone[milestoneIndex][msg.sender];
             require(lastVote != vote, "Same Vote was already made");
@@ -259,22 +262,33 @@ contract Donation{
 
         emit MilestoneVoteSubmitted(msg.sender, milestoneIndex, vote);
 
-        if(isMilestoneRejected(milestoneIndex)){
+        //if(isVoteRejected(milestones[milestoneIndex].rejectedCount, milestones[milestoneIndex].approvedCount + milestones[milestoneIndex].rejectedCount)){
+        if(isVoteRejected(milestones[milestoneIndex].rejectedCount, validators.length)){
             milestones[milestoneIndex].votingFinished = true;
             emit MilestoneVotingFinished(milestoneIndex, false);
-            milestoneVotingDeadline = 0;
+            votingDeadline = 0;
 
             Status oldStatus = currentStatus;
             currentStatus = Status.Failed;
             emit StatusChanged(oldStatus, currentStatus, FailureReason.RejectedByValidators);
 
             refundableBalance = address(this).balance;
+
         }
-        else if(isMilestoneApproved(milestoneIndex)){
+        //else if(isVoteApproved(milestones[milestoneIndex].approvedCount, milestones[milestoneIndex].approvedCount + milestones[milestoneIndex].rejectedCount)){
+        else if(isVoteApproved(milestones[milestoneIndex].approvedCount, validators.length)){
             milestones[milestoneIndex].votingFinished = true;
             emit MilestoneVotingFinished(milestoneIndex, true);
-            milestoneVotingDeadline = 0;
+            votingDeadline = 0;
+
+            if(milestoneIndex == milestones.length - 1){
+                Status oldStatus = currentStatus;
+                currentStatus = Status.Closed;
+                emit StatusChanged(oldStatus, currentStatus, FailureReason.None);
+            }
         }
+
+
     }
 
     ///Can be called by the owner after funding to pay out the money for the next milestone when the last milestone has been approved.
@@ -288,15 +302,10 @@ contract Donation{
         milestones[milestoneIndex].paid = true;
         totalPayout += milestonePayout;
 
-        milestoneVotingDeadline = block.timestamp + milestoneVotingDuration;
+        votingDeadline = block.timestamp + votingDuration;
         
-        if (currentMilestoneIndex < milestones.length - 1){
-            currentMilestoneIndex++;
-        }else{
-            Status oldStatus = currentStatus;
-            currentStatus = Status.Closed;
-            emit StatusChanged(oldStatus, currentStatus, FailureReason.None);
-        } 
+        currentMilestoneIndex++;
+
         emit PayoutMade(milestoneIndex, milestonePayout);
 
         (bool success, ) = payable(contractOwner).call{value: milestonePayout}("");
@@ -336,9 +345,9 @@ contract Donation{
     }
 
     ///Marks the project as failed when the validators did not approve the last milestone within the deadline.
-    function markAsFailedDueToExpiredVoting() external onlyDuringPayout MilestoneDeadlineIsSet() {
-        require(block.timestamp >= milestoneVotingDeadline, "Milestone Voting Duration has not been exceeded yet");
-        require(milestones[currentMilestoneIndex-1].paid, "This Milestone wasnt paid out yet");
+    function markAsFailedDueToExpiredVoting() external MilestoneDeadlineIsSet() {
+        require(currentStatus == Status.ToBeApproved|| currentStatus == Status.Payout, "only possible in projectSetupApproval or payout phase");
+        require(block.timestamp >= votingDeadline, "Milestone Voting Duration has not been exceeded yet");
 
         Status oldStatus = currentStatus;
         currentStatus = Status.Failed; 
@@ -350,7 +359,7 @@ contract Donation{
 
     ///Can be called by the owner to fail the project to enable refunds as soon as it is clear they will not be able to keep working and succeed on the project.
     function endByOwner() external isOwner{
-        require(currentStatus == Status.Funding || currentStatus == Status.Payout, "failure by owner only pssible in funding or payout phase");
+        require(currentStatus == Status.Funding || currentStatus == Status.ToBeApproved|| currentStatus == Status.Payout, "failure by owner only pssible in funding or payout phase");
         
         Status oldStatus = currentStatus;
         currentStatus = Status.Failed; 
@@ -444,14 +453,20 @@ contract Donation{
         _;
     }
 
+    modifier ProjectSetupVotingOpen(){
+        require(!projectSetup.votingFinished, "Project setup Voting has already finished");
+        require(votingDeadline > block.timestamp, "Project setup Voting Deadline exceeded");
+        _;  
+    }
+
     modifier MilestoneVotingOpen(uint256 milestoneIndex){
         require(!milestones[milestoneIndex].votingFinished, "Milestone Voting has already finished");
-        require(milestoneVotingDeadline > block.timestamp, "Milestone Voting Deadline exceeded");
+        require(votingDeadline > block.timestamp, "Milestone Voting Deadline exceeded");
         _;  
     }
 
     modifier MilestoneDeadlineIsSet() {
-        require(milestoneVotingDeadline > 0, "Currently No Deadline is active");
+        require(votingDeadline > 0, "Currently No Deadline is active");
         _;
     }
 
