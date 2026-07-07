@@ -30,6 +30,8 @@ contract Donation{
     ///stores the total donations per donor
     mapping(address => uint256) public donations;
 
+    uint256 constant validatorMinimumDonation = 1 ether;
+    uint256 constant validatorCount = 5;
     address[] public validators;
     ///makes check whether adress is a validator cheap and fast
     mapping(address => bool) public isValidator;
@@ -127,7 +129,7 @@ contract Donation{
         FailureReason reason
     );
 
-    constructor(address owner, address[] memory validators_, string memory description_, uint256 duration, uint256[] memory milestoneAmounts, string[] memory milestoneDescriptions){
+    constructor(address owner, string memory description_, uint256 duration, uint256[] memory milestoneAmounts, string[] memory milestoneDescriptions){
         require(duration > 0, "Duration must be positive");
         require(milestoneAmounts.length == milestoneDescriptions.length, "Milestone arrays not equally long");
 
@@ -138,23 +140,6 @@ contract Donation{
             milestonesTotal += milestoneAmounts[i];
             milestones.push(Milestone(milestoneAmounts[i], milestoneDescriptions[i], 0, 0, false, false));
         }
-
-
-        for(uint i = 0; i < validators_.length; i++){
-            address validator = validators_[i];
-            require(validator != address(0),"Empty address validator not allowed"
-            );
-
-            require(validator != owner,"Project owner cannot be a validator"
-            );
-
-            require(!isValidator[validator], "Validator already exists"
-            );
-
-            isValidator[validators_[i]] = true;
-            validators.push(validator);
-        }
-        require(validators.length > 0, "Validator required");
 
 
         donationGoal = milestonesTotal;
@@ -180,6 +165,7 @@ contract Donation{
         emit DonationReceived(donor, donation);
 
         if(totalDonations >= donationGoal){
+            setValidators(generateRandomNumber());
             votingDeadline = block.timestamp + votingDuration;
             Status oldStatus = currentStatus;
             currentStatus = Status.ToBeApproved;
@@ -367,6 +353,55 @@ contract Donation{
         emit StatusChanged(oldStatus, currentStatus, FailureReason.EndedByOwner);
 
         refundableBalance = address(this).balance;
+    }
+
+    function generateRandomNumber() internal view returns (uint256) {
+        return uint256(keccak256(abi.encodePacked(block.timestamp,block.prevrandao,donors.length)));
+    }
+
+    function callSetValidators(uint256 randomNumber) external {
+        setValidators(randomNumber);
+    }
+
+    function getPotentialValidators() internal view returns (address[] memory){
+        uint256 numberOfPotentialValidators = 0;
+        for (uint256 i = 0; i < donors.length; i++) {
+            if (donations[donors[i]] >= validatorMinimumDonation){
+                numberOfPotentialValidators++;
+            }
+        }
+        require(numberOfPotentialValidators >= validatorCount, "Not enough potential validators");
+        address[] memory validatorPool = new address[](numberOfPotentialValidators);
+        uint256 poolIndex = 0;
+
+        for (uint256 i = 0; i < donors.length; i++) {
+            if (donations[donors[i]] >= validatorMinimumDonation){
+                validatorPool[poolIndex] = donors[i];
+                poolIndex++;
+            }
+        }
+        return validatorPool;
+    }
+
+
+
+    function setValidators(uint256 randomNumber) internal {
+        require(validators.length == 0, "Validators already selected");
+        require(donors.length >= validatorCount, "Not enough donors");
+
+        address[] memory validatorPool = getPotentialValidators();
+        uint256 poolLen = validatorPool.length;
+
+        for (uint256 i = 0; i < validatorCount; i++) {
+
+            uint256 j = i + (randomNumber % (poolLen - i));
+            (validatorPool[i], validatorPool[j]) = (validatorPool[j], validatorPool[i]);
+
+            validators.push(validatorPool[i]);
+            isValidator[validatorPool[i]] = true;
+
+            randomNumber = uint256(keccak256(abi.encode(randomNumber)));
+        }
     }
 
     modifier isPositiveDonation(uint256 x){
