@@ -371,7 +371,8 @@ contract Donation{
                 numberOfPotentialValidators++;
             }
         }
-        require(numberOfPotentialValidators >= validatorCount, "Not enough potential validators");
+        // should require enough potential validators
+        //require(numberOfPotentialValidators >= validatorCount, "Not enough potential validators");
         address[] memory validatorPool = new address[](numberOfPotentialValidators);
         uint256 poolIndex = 0;
 
@@ -388,13 +389,15 @@ contract Donation{
     ///Choses random validators with the help of a random number.Validators need to have donated more than a certain minimum threshold.
     function setValidators(uint256 randomNumber) internal {
         require(validators.length == 0, "Validators already selected");
-        require(donors.length >= validatorCount, "Not enough donors");
+        // should require enough potential validators
+        //require(donors.length >= validatorCount, "Not enough donors");
 
         address[] memory validatorPool = getPotentialValidators();
         uint256 poolLen = validatorPool.length;
+        uint256 numberOfPicks = poolLen < validatorCount ? poolLen : validatorCount;
 
         //fisher yates shuffle
-        for (uint256 i = 0; i < validatorCount; i++) {
+        for (uint256 i = 0; i < numberOfPicks; i++) {
 
             uint256 j = i + (randomNumber % (poolLen - i));
             (validatorPool[i], validatorPool[j]) = (validatorPool[j], validatorPool[i]);
