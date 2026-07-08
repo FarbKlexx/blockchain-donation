@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onUnmounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { computed, onUnmounted, ref } from 'vue'
+import { RouterLink, useRoute } from 'vue-router'
 import AppLogo from '@/components/ui/AppLogo.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import LoginDialog from '@/components/auth/LoginDialog.vue'
@@ -10,6 +10,11 @@ import { shortenAddress } from '@/utils/address'
 // Wallet login + the connected account menu. Roles drive what the menu shows;
 // see stores/wallet.ts (roles are presentation-only, derived from chain).
 const wallet = useWalletStore()
+const route = useRoute()
+
+// Two top-level sections share this navbar: the donation projects and the
+// (independent) coupon subsystem. The coupon section owns every /gutschein* path.
+const onCoupons = computed(() => route.path.startsWith('/gutschein'))
 
 const dialogOpen = ref(false)
 const menuOpen = ref(false)
@@ -43,6 +48,16 @@ onUnmounted(() => window.removeEventListener('click', closeMenu))
     <RouterLink to="/" class="navbar__logo" aria-label="Zur Startseite">
       <AppLogo />
     </RouterLink>
+
+    <!-- Section tabs: Projekte (donations) | Gutscheine (coupons). -->
+    <nav class="navbar__tabs" aria-label="Bereiche">
+      <RouterLink :to="{ name: 'home' }" class="tab" :class="{ 'tab--active': !onCoupons }">
+        Projekte
+      </RouterLink>
+      <RouterLink :to="{ name: 'coupons' }" class="tab" :class="{ 'tab--active': onCoupons }">
+        Gutscheine
+      </RouterLink>
+    </nav>
 
     <!-- Not connected: open the login overlay. -->
     <button
@@ -96,6 +111,24 @@ onUnmounted(() => window.removeEventListener('click', closeMenu))
         >
           Meine Projekte
         </RouterLink>
+        <div class="menu__sep" role="separator" />
+        <RouterLink
+          :to="{ name: 'coupon-create' }"
+          class="menu__item"
+          role="menuitem"
+          @click="closeMenu"
+        >
+          Gutscheine erstellen
+        </RouterLink>
+        <RouterLink
+          :to="{ name: 'my-coupons' }"
+          class="menu__item"
+          role="menuitem"
+          @click="closeMenu"
+        >
+          Meine Gutscheine
+        </RouterLink>
+        <div class="menu__sep" role="separator" />
         <button class="menu__item menu__item--button" type="button" role="menuitem" @click="logout">
           Abmelden
         </button>
@@ -115,6 +148,28 @@ onUnmounted(() => window.removeEventListener('click', closeMenu))
   padding: 0 32px;
   background: var(--bd-surface);
   border-bottom: 1px solid var(--bd-stroke);
+}
+
+.navbar__tabs {
+  display: flex;
+  gap: 10px;
+}
+
+.tab {
+  padding: 8px 16px;
+  border: 1px solid var(--bd-stroke);
+  border-radius: 6px;
+  background: var(--bd-surface);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--bd-grey-text);
+}
+
+.tab--active {
+  background: var(--bd-black);
+  border-color: var(--bd-black);
+  color: var(--bd-surface);
+  font-weight: 600;
 }
 
 .navbar__wallet {
@@ -211,5 +266,11 @@ onUnmounted(() => window.removeEventListener('click', closeMenu))
 
 .menu__item--button {
   color: var(--bd-grey-text);
+}
+
+.menu__sep {
+  height: 1px;
+  margin: 6px 0;
+  background: var(--bd-divider);
 }
 </style>

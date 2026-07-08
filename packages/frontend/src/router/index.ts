@@ -56,6 +56,34 @@ const router = createRouter({
         if (!useWalletStore().isConnected) return { name: 'home' }
       },
     },
+    // ── Coupon subsystem (independent of the donation system) ──
+    {
+      path: '/gutscheine',
+      name: 'coupons',
+      // Lazy-loaded: separate chunk for the coupon landing page.
+      component: () => import('@/views/CouponView.vue'),
+    },
+    {
+      // Create your own coupons (any connected wallet; the view itself prompts
+      // login when there is no session, so it stays reachable to explain the flow).
+      path: '/gutscheine-erstellen',
+      name: 'coupon-create',
+      component: () => import('@/views/CouponCreateView.vue'),
+    },
+    {
+      // The creator's coupons + private keys. Reachable without a session — the
+      // view shows a login prompt — so a hard refresh here is not a dead end.
+      path: '/meine-gutscheine',
+      name: 'my-coupons',
+      component: () => import('@/views/MyCouponsView.vue'),
+    },
+    {
+      // Stand-in merchant checkout where a coupon is redeemed (anyone with the
+      // key). Optional ?id=&key= prefill from the reveal card.
+      path: '/gutschein-einloesen',
+      name: 'coupon-redeem',
+      component: () => import('@/views/CouponRedeemView.vue'),
+    },
     {
       path: '/:pathMatch(.*)*',
       redirect: { name: 'home' },

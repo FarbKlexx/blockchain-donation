@@ -31,12 +31,12 @@ export type ContractStatus = 'Funding' | 'Payout' | 'Failed' | 'Closed'
  *  frontend ignores (see the header note). No "status" string is stored on-chain;
  *  it is derived (see projectsService.deriveMilestoneStatus).
  *
- *  VOTING MODEL (important): milestone 0 is paid out immediately once funding
- *  succeeds; every later milestone is released only after validators APPROVE the
- *  PREVIOUS one. So a milestone's `approvedCount`/`rejectedCount` are votes cast
- *  on THAT milestone after it was paid, and their approval is what unlocks the
- *  NEXT milestone's payout. The milestone being voted on is always
- *  `currentMilestoneIndex - 1`. */
+ *  VOTING MODEL (important): once funding succeeds, EVERY milestone — including
+ *  the first — must be APPROVED by the validators before its funds are released.
+ *  A milestone's `approvedCount`/`rejectedCount` are the votes cast on THAT
+ *  milestone while it is up for a vote (before it is paid), and their approval is
+ *  what releases ITS OWN payout. The milestone being voted on is always the one
+ *  to be paid next, `currentMilestoneIndex` (still unpaid). */
 export interface ContractMilestone {
   /** Absolute funds allocated to this milestone, native coin (`amount`). All
    *  milestone amounts sum to `donationGoal`. */
@@ -81,15 +81,15 @@ export interface ContractCampaign {
   end: number
   /** Lifecycle state (`currentStatus`). The UI's laufend/abgelaufen is derived. */
   currentStatus: ContractStatus
-  /** Index of the milestone to be paid NEXT (`currentMilestoneIndex`). The
-   *  milestone currently up for a vote is `currentMilestoneIndex - 1` (the
-   *  just-paid one); approving it releases this one. */
+  /** Index of the milestone to be paid NEXT (`currentMilestoneIndex`). This is
+   *  also the milestone currently up for a vote (still unpaid); approving it
+   *  releases its own payout. */
   currentMilestoneIndex: number
   /** Funds released across all milestones so far (`totalPayout`). */
   totalPayout: number
   /** Unix seconds until which the open milestone vote runs
    *  (`milestoneVotingDeadline`). 0 = no vote currently open; a future value =
-   *  validators may still vote on `currentMilestoneIndex - 1`. */
+   *  validators may still vote on `currentMilestoneIndex`. */
   milestoneVotingDeadline: number
   /** Amount set aside for proportional donor refunds, fixed at the moment the
    *  project fails (`refundableBalance`). 0 unless `currentStatus === 'Failed'`. */

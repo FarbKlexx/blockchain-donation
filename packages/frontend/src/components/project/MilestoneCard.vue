@@ -79,7 +79,7 @@ const avatars = computed(() =>
           <span>Freigegeben</span>
         </div>
         <!-- Validators are voting on this milestone right now; their approval
-             releases the next milestone. -->
+             releases this milestone's own funds. -->
         <div v-else-if="milestone.status === 'in_progress'" class="ms__confirm">
           <div class="ms__avatars">
             <span v-for="(a, i) in avatars" :key="i" class="ms__avatar" :title="a.address">
@@ -92,7 +92,8 @@ const avatars = computed(() =>
             · {{ milestone.requiredApprovals }} für Freigabe nötig
           </span>
         </div>
-        <!-- Not yet up for a vote — a previous milestone must be released first. -->
+        <!-- Not yet up for a vote — an earlier milestone must be approved and
+             released first. -->
         <div v-else class="ms__locked">
           <AppIcon name="lock" :size="14" />
           <span>Noch nicht zur Abstimmung freigegeben</span>
