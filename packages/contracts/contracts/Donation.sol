@@ -173,6 +173,8 @@ contract Donation{
         }
     }
 
+    ///Can be called by validators to vote on the project setup so that the owner can start paying out money for the mielstones.
+    ///Can be called as long as the poll has not been decided. 
     function voteProjectSetup(bool vote) external isAllowedToVote onlyDuringToBeApproved() ProjectSetupVotingOpen(){
         if(hasVotedForProjectSetup[msg.sender] == true){
             bool lastVote = votesForProjectSetup[msg.sender];
@@ -355,14 +357,13 @@ contract Donation{
         refundableBalance = address(this).balance;
     }
 
+    ///ONLY FOR LOCAL TESTING, NOT SAFE FOR DEPLOYMENT
+    ///generates a pseudo random number 
     function generateRandomNumber() internal view returns (uint256) {
         return uint256(keccak256(abi.encodePacked(block.timestamp,block.prevrandao,donors.length)));
     }
 
-    function callSetValidators(uint256 randomNumber) external {
-        setValidators(randomNumber);
-    }
-
+    ///Checks for donors that donated enough be a validator candidate. Returns a list of these potential validators.
     function getPotentialValidators() internal view returns (address[] memory){
         uint256 numberOfPotentialValidators = 0;
         for (uint256 i = 0; i < donors.length; i++) {
@@ -384,7 +385,7 @@ contract Donation{
     }
 
 
-
+    ///Choses random validators with the help of a random number.Validators need to have donated more than a certain minimum threshold.
     function setValidators(uint256 randomNumber) internal {
         require(validators.length == 0, "Validators already selected");
         require(donors.length >= validatorCount, "Not enough donors");
@@ -392,6 +393,7 @@ contract Donation{
         address[] memory validatorPool = getPotentialValidators();
         uint256 poolLen = validatorPool.length;
 
+        //fisher yates shuffle
         for (uint256 i = 0; i < validatorCount; i++) {
 
             uint256 j = i + (randomNumber % (poolLen - i));
