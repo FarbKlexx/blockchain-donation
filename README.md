@@ -2,14 +2,17 @@
 
 Spenden-dApp als **npm-Workspaces-Monorepo**: Smart Contracts (Hardhat 3 +
 ethers v6) in [`packages/contracts`](packages/contracts), Vue-3-Frontend in
-[`packages/frontend`](packages/frontend). Die Contracts erzeugen beim Kompilieren
-ABIs und typsichere TypeScript-Bindings, die automatisch ins Frontend gespiegelt
-werden — so „zeigt" das Frontend per ethers.js auf den deployten Contract.
+[`packages/frontend`](packages/frontend), Flask/SQLite-Backend für Off-Chain-
+Metadaten in [`packages/backend`](packages/backend). Die Contracts erzeugen
+beim Kompilieren ABIs und typsichere TypeScript-Bindings, die automatisch ins
+Frontend gespiegelt werden — so „zeigt" das Frontend per ethers.js auf den
+deployten Contract.
 
-> **Hinweis zum Stand:** Der aktuelle Contract `Counter` ist der Platzhalter aus
-> dem Hardhat-3-Sample. Die eigentliche Spenden-Logik (Spende / Stimme /
-> Auszahlung, siehe Diagramme unten) wird hier noch eingesetzt. Die gesamte
-> Architektur und das Tooling stehen aber bereits.
+Die Spenden-Logik (`Donation`/`DonationFactory`: Spende / Stimme / Auszahlung,
+siehe Diagramme unten) ist implementiert und im Frontend verdrahtet
+([`projectsService.ts`](packages/frontend/src/services/projectsService.ts)).
+Für eine lokale Demo mit Beispielkampagnen siehe
+[Demo lokal starten](#demo-lokal-starten).
 
 ---
 
@@ -17,7 +20,7 @@ werden — so „zeigt" das Frontend per ethers.js auf den deployten Contract.
 
 - **Node.js 22 LTS** (≥ 22.13.0). Hardhat 3 verlangt diese Version; auf Node 24/25
   scheitert der Solidity-Test-Reporter (siehe [Troubleshooting](#troubleshooting)).
-- Das Repo pinnt die Version in `.nvmrc` / `.node-version`. Mit nvm/fnm/Volta:
+  Das Repo pinnt die Version in `.nvmrc` / `.node-version`. Mit nvm/fnm/Volta:
 
   ```sh
   nvm use        # oder: fnm use   → liest .nvmrc / .node-version
@@ -25,6 +28,8 @@ werden — so „zeigt" das Frontend per ethers.js auf den deployten Contract.
 
   Ohne Versionsmanager einfach Node 22 LTS verwenden. Die `engines`-Felder sind
   ein Hinweis (npm **warnt**, blockiert die Installation aber nicht).
+- **Python 3** (für [`packages/backend`](packages/backend), das Off-Chain-
+  Metadaten über eine Flask-API + SQLite bereitstellt).
 
 ---
 
@@ -33,13 +38,66 @@ werden — so „zeigt" das Frontend per ethers.js auf den deployten Contract.
 ```sh
 git clone https://github.com/FarbKlexx/blockchain-donation.git && cd blockchain-donation
 nvm use                 # Node 22 aktivieren
-npm install             # installiert alle Workspaces auf einmal
-npm run compile         # Contracts kompilieren + ABIs/Typen ins Frontend spiegeln
-npm run dev             # Frontend starten (kompiliert vorher die Contracts)
+npm install              # installiert alle Node-Workspaces (contracts + frontend) auf einmal
+npm run compile          # Contracts kompilieren + ABIs/Typen ins Frontend spiegeln
+pip install -r packages/backend/requirements.txt
 ```
 
-> `npm install` einmal im Root genügt — npm Workspaces installiert beide Pakete
-> gemeinsam und teilt Dependencies über das Root-`node_modules`.
+> `npm install` einmal im Root genügt — npm Workspaces installiert beide
+> Node-Pakete gemeinsam und teilt Dependencies über das Root-`node_modules`.
+> Das Backend ist ein eigenständiges Python-Paket, daher `pip install` separat.
+
+Danach entweder direkt die Demo starten (nächster Abschnitt) oder mit
+`npm run dev` nur das Frontend gegen eine bereits laufende Node/Backend
+starten.
+
+---
+
+## Demo lokal starten
+
+Baut eine lokale Blockchain mit **5 Beispielkampagnen** auf (dieselben
+Kampagnen wie in [`packages/frontend/src/data/contractData.json`](packages/frontend/src/data/contractData.json),
+aber mit echten Hardhat-Accounts statt Fake-Adressen — inkl. Spenden,
+Auszahlungen und Validator-Stimmen, sodass die Status-Varianten Funding (×3),
+Payout (×1) und Closed (×1) vorkommen; `Failed` wird von der Demo nicht
+erzeugt). Vier Terminals:
+
+```sh
+# Terminal 1 — lokale Chain
+npm run node -w contracts
+
+# Terminal 2 — Factory + 5 Kampagnen deployen, Spenden/Votes/Payouts nachspielen.
+# Schreibt automatisch VITE_CONTRACT_ADDRESS in packages/frontend/.env, aktualisiert
+# die Adressen in projectMetadata.json und löscht packages/backend/data.db (siehe unten).
+npm run deploy:donations -w contracts
+
+# Terminal 3 — Backend (reseedet data.db aus dem aktualisierten projectMetadata.json)
+cd packages/backend && python app.py
+
+# Terminal 4 — Frontend
+npm run dev -w frontend
+```
+
+App unter `http://localhost:5173`. Terminal 2 muss **nach** Terminal 1 und
+**vor** Terminal 3 laufen — die Reihenfolge ist wichtig, weil es Adressen
+schreibt, die Backend und Frontend beim Start lesen. Erneut ausführbar: jeder
+Lauf von Terminal 2 deployt frische Contracts auf die aktuell laufende Node
+und überschreibt die Adressen erneut (z. B. nach einem Neustart von Terminal 1).
+
+**Rollen der 20 Standard-Hardhat-Accounts** (`npx hardhat node` gibt alle
+Adressen + Private Keys aus):
+
+| Accounts | Rolle |
+| --- | --- |
+| #0 | Deployer + Standard-`VITE_DEV_PRIVATE_KEY` in `.env` — in keiner Kampagne eine Rolle (neutraler Zuschauer) |
+| #1–#5 | Je ein Owner, eine Kampagne pro Account |
+| #6–#8 | Validatoren, identisch in allen 5 Kampagnen |
+| #9–#19 | Spender-Pool |
+
+Um eine Schreibaktion (Spenden/Voten/Auszahlen) als bestimmte Rolle zu testen,
+`VITE_DEV_PRIVATE_KEY` in `packages/frontend/.env` auf den passenden Private
+Key setzen (aus der Konsolenausgabe von Terminal 1) und Vite neu laden — kein
+Wallet/MetaMask nötig für die lokale Demo.
 
 ---
 
@@ -54,13 +112,16 @@ blockchain-donation/
 ├─ docs/                           # Architektur-Diagramme (SVG)
 └─ packages/
    ├─ contracts/                   # Hardhat 3 · Solidity · ethers v6 · TypeChain
-   │  ├─ contracts/                #   *.sol  (Counter = Platzhalter, + *.t.sol)
+   │  ├─ contracts/                #   Donation.sol, DonationFactory.sol (+ Counter.sol Sample, *.t.sol)
    │  ├─ test/                     #   TS-Integrationstests (mocha + ethers)
-   │  ├─ ignition/modules/         #   Ignition-Deploy-Module
-   │  ├─ scripts/                  #   copy-artifacts.js, send-op-tx.ts
+   │  ├─ ignition/modules/         #   Ignition-Deploy-Module (Counter-Sample)
+   │  ├─ scripts/                  #   copy-artifacts.js, deploy-donations.ts, send-op-tx.ts
    │  ├─ hardhat.config.ts         #   Netzwerke, solidity-Profile, typechain
    │  ├─ types/ethers-contracts/   #   generierte TypeChain-Typen   (gitignored)
    │  └─ artifacts/                #   Bytecode + ABI               (gitignored)
+   ├─ backend/                     # Flask · SQLite — Off-Chain-Metadaten (/api/projects)
+   │  ├─ app.py / database.py / models.py
+   │  └─ data.db                   #   generiert/reseedet, siehe Demo-Abschnitt oben
    └─ frontend/                    # Vue 3 · Vite · ethers v6
       └─ src/
          ├─ contracts/             #   generiert via copy-artifacts (gitignored)
@@ -239,16 +300,25 @@ await tx.wait()                         // … und auf Bestätigung warten
 > `parseEther`/`formatEther` sind Top-Level-Importe, Adresse via
 > `await contract.getAddress()`; bei `BrowserProvider` ist `getSigner()` **async**.
 
+> Das obige ist die minimale ethers-v6-Skizze mit dem `Counter`-Sample. Die
+> echte, vollständige Anbindung (Reads ohne Wallet, Writes mit Dev-Key/Wallet,
+> Re-Read nach jeder Transaktion) steht in
+> [`projectsService.ts`](packages/frontend/src/services/projectsService.ts).
+
 ---
 
 ## Deployment
 
-**Lokal** (zwei Terminals):
+**Lokal, `Counter`-Sample** (zwei Terminals) — der generische Hardhat-3-Beispiel-Contract:
 
 ```sh
 npm run node            # Terminal 1: lokale Chain starten
 npm run deploy:local    # Terminal 2: Ignition-Modul dagegen deployen
 ```
+
+**Lokal, Spenden-Kampagnen** — `DonationFactory` + 5 Beispielkampagnen deployen
+und Adressen automatisch verdrahten: siehe [Demo lokal starten](#demo-lokal-starten)
+(`npm run deploy:donations`).
 
 **Sepolia** — Secrets liegen im verschlüsselten Keystore (Hardhat 3 hat **keinen**
 `.env`-Loader; `configVariable` liest aus Keystore bzw. Env-Variablen):
@@ -276,8 +346,9 @@ Im Repo-Root ausführbar; delegieren an die passenden Workspaces:
 | `npm run compile` | Contracts kompilieren (Typen + ABIs ins Frontend) |
 | `npm run test:contracts` | Hardhat-Tests |
 | `npm run node` | Lokale Hardhat-Node starten |
-| `npm run deploy:local` | Ignition-Deployment gegen die lokale Node |
-| `npm run deploy:sepolia` | Ignition-Deployment nach Sepolia |
+| `npm run deploy:local` | Ignition-Deployment (`Counter`-Sample) gegen die lokale Node |
+| `npm run deploy:sepolia` | Ignition-Deployment (`Counter`-Sample) nach Sepolia |
+| `npm run deploy:donations` | `DonationFactory` + 5 Beispielkampagnen deployen, siehe [Demo lokal starten](#demo-lokal-starten) |
 | `npm run dev` | Contracts kompilieren **+** Frontend-Dev-Server |
 | `npm run build` | Contracts kompilieren **+** Frontend-Production-Build |
 
@@ -299,3 +370,18 @@ Einzelne Workspace-Scripts gezielt: `npm run <script> -w contracts` bzw.
 - **`npm warn EBADENGINE … required: { node: '^22.13.0' }`**
   Nur ein Hinweis, dass du nicht auf Node 22 bist. Die Installation läuft
   trotzdem durch.
+- **`deploy:donations` bricht mit `EADDRINUSE :8545` ab**
+  Es läuft schon eine Node auf dem Port (z. B. ein alter, nicht sauber beendeter
+  `npm run node`-Prozess). Prozess beenden (Windows: `netstat -ano | findstr :8545`,
+  dann `taskkill /F /PID <pid>`; Unix: `lsof -i :8545`, dann `kill <pid>`) und
+  `npm run node` neu starten.
+- **`deploy:donations` meldet `EBUSY` beim Löschen von `data.db`**
+  Kurzzeitige Dateisperre (z. B. Windows-Indexierung); das Skript versucht es
+  automatisch mehrmals. Bleibt es bestehen: `packages/backend/data.db` manuell
+  löschen, dann das Backend neu starten (reseedet automatisch).
+- **Projekt-Grid bleibt leer ("Keine Projekte in dieser Ansicht"), obwohl deployt wurde**
+  Meist läuft eines der drei Teile (Node/Backend/Frontend) nicht, oder
+  `VITE_CONTRACT_ADDRESS` in `packages/frontend/.env` ist leer/veraltet — nach
+  jedem `deploy:donations`-Lauf wird sie neu geschrieben. Falls das Grid bei
+  einem bereits laufenden `npm run dev` leer bleibt, den Dev-Server neu starten,
+  damit die aktuelle `.env` sicher geladen ist.

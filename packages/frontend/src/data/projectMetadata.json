@@ -2,7 +2,7 @@
   "_comment": "MOCK of SOURCE 2: the backend API (off-chain metadata). Human-readable content the frontend will later fetch over REST — texts, images, news, milestone titles/descriptions. Joined onto contractData.json by `address` (the on-chain contract address, stored here as the project's unique id); milestones join by array position. `id` is a human slug used only for routes. `verified` is a backend assertion (NOT on-chain). Validators are not here — they are anonymous on-chain addresses from the contract.",
   "projects": [
     {
-      "address": "0x7f4b2c9d1e3a5f7c8b0d2e4a6c8f1b3d5e7089a2",
+      "address": "0xCafac3dD18aC6c6e92c921884f9E4176737C052c",
       "id": "burger-restaurant",
       "verified": true,
       "title": "Burger Restaurant",
@@ -15,10 +15,26 @@
       "image": "uploads/burger-restaurant/cover.jpg",
       "category": "Fairer Handel & Bio",
       "milestones": [
-        { "index": "01", "title": "Standort-Suche & Mietvertrag", "description": "Findung des perfekten Standorts und Abschluss des Mietvertrags für das zukünftige Restaurant." },
-        { "index": "02", "title": "Küchenausstattung & Einrichtung", "description": "Anschaffung von professioneller Küchentechnik, Möbeln und Dekoration für einen einladenden Gastraum." },
-        { "index": "03", "title": "Lieferantennetzwerk & Beschaffung", "description": "Aufbau eines lokalen Lieferantennetzwerks für frische Zutaten und Abschluss der ersten Großbestellungen." },
-        { "index": "04", "title": "Marketingkampagne & Personal", "description": "Entwicklung der Markenidentität, Social-Media-Kampagne und Rekrutierung des Start-Teams." }
+        {
+          "index": "01",
+          "title": "Standort-Suche & Mietvertrag",
+          "description": "Findung des perfekten Standorts und Abschluss des Mietvertrags für das zukünftige Restaurant."
+        },
+        {
+          "index": "02",
+          "title": "Küchenausstattung & Einrichtung",
+          "description": "Anschaffung von professioneller Küchentechnik, Möbeln und Dekoration für einen einladenden Gastraum."
+        },
+        {
+          "index": "03",
+          "title": "Lieferantennetzwerk & Beschaffung",
+          "description": "Aufbau eines lokalen Lieferantennetzwerks für frische Zutaten und Abschluss der ersten Großbestellungen."
+        },
+        {
+          "index": "04",
+          "title": "Marketingkampagne & Personal",
+          "description": "Entwicklung der Markenidentität, Social-Media-Kampagne und Rekrutierung des Start-Teams."
+        }
       ],
       "news": [
         {
@@ -42,7 +58,7 @@
       ]
     },
     {
-      "address": "0x3a1d8c2b4e6f0a9c7b5d3e1f8a06c4b2d9e177be",
+      "address": "0x9f1ac54BEF0DD2f6f3462EA0fa94fC62300d3a8e",
       "id": "mesh-netzwerk-festivals",
       "verified": true,
       "title": "Mesh-Netzwerk für Festivals",
@@ -54,9 +70,21 @@
       "image": "uploads/mesh-netzwerk-festivals/cover.jpg",
       "category": "Open Source",
       "milestones": [
-        { "index": "01", "title": "Hardware-Beschaffung", "description": "Einkauf der Funkmodule, Solarpanels und wetterfesten Gehäuse für die erste Knotenserie." },
-        { "index": "02", "title": "Mesh-Software & Routing", "description": "Entwicklung und Härtung des selbstorganisierenden Routings für tausende gleichzeitige Geräte." },
-        { "index": "03", "title": "Feldtest auf Partnerfestival", "description": "Aufbau und Live-Test des Netzwerks unter realer Last über ein komplettes Festivalwochenende." }
+        {
+          "index": "01",
+          "title": "Hardware-Beschaffung",
+          "description": "Einkauf der Funkmodule, Solarpanels und wetterfesten Gehäuse für die erste Knotenserie."
+        },
+        {
+          "index": "02",
+          "title": "Mesh-Software & Routing",
+          "description": "Entwicklung und Härtung des selbstorganisierenden Routings für tausende gleichzeitige Geräte."
+        },
+        {
+          "index": "03",
+          "title": "Feldtest auf Partnerfestival",
+          "description": "Aufbau und Live-Test des Netzwerks unter realer Last über ein komplettes Festivalwochenende."
+        }
       ],
       "news": [
         {
@@ -71,7 +99,7 @@
       ]
     },
     {
-      "address": "0x9c2e7b4d1a8f3c6b0d5e9a2f7c1b8d6e304541af",
+      "address": "0xbf9fBFf01664500A33080Da5d437028b07DFcC55",
       "id": "roguelike-aetherbound",
       "verified": true,
       "title": "Roguelike „Aetherbound“",
@@ -83,9 +111,21 @@
       "image": "uploads/roguelike-aetherbound/cover.jpg",
       "category": "Games",
       "milestones": [
-        { "index": "01", "title": "Spielbarer Prototyp", "description": "Fertigstellung des Kern-Gameplay-Loops und eines spielbaren vertikalen Slices." },
-        { "index": "02", "title": "Art & Sound", "description": "Handgezeichnete Assets, Animationen und ein adaptiver Soundtrack für die erste Welt." },
-        { "index": "03", "title": "Early-Access-Release", "description": "Politur, Balancing und Veröffentlichung der Early-Access-Version für Unterstützer." }
+        {
+          "index": "01",
+          "title": "Spielbarer Prototyp",
+          "description": "Fertigstellung des Kern-Gameplay-Loops und eines spielbaren vertikalen Slices."
+        },
+        {
+          "index": "02",
+          "title": "Art & Sound",
+          "description": "Handgezeichnete Assets, Animationen und ein adaptiver Soundtrack für die erste Welt."
+        },
+        {
+          "index": "03",
+          "title": "Early-Access-Release",
+          "description": "Politur, Balancing und Veröffentlichung der Early-Access-Version für Unterstützer."
+        }
       ],
       "news": [
         {
@@ -99,7 +139,7 @@
       ]
     },
     {
-      "address": "0x4d8f1a3c5e7b9d0a2c4e6f8b1d3a5c7e9f040b73",
+      "address": "0x93b6BDa6a0813D808d75aA42e900664Ceb868bcF",
       "id": "mobile-suppenkueche-berlin",
       "verified": true,
       "title": "Mobile Suppenküche Berlin",
@@ -111,9 +151,21 @@
       "image": "uploads/mobile-suppenkueche-berlin/cover.jpg",
       "category": "Soziales",
       "milestones": [
-        { "index": "01", "title": "Foodtruck-Kauf", "description": "Anschaffung eines gebrauchten, TÜV-geprüften Transporters als Basis für die mobile Küche." },
-        { "index": "02", "title": "Küchenumbau", "description": "Einbau von Herd, Kühlung und Spüle sowie Abnahme durch das Gesundheitsamt." },
-        { "index": "03", "title": "Erstausstattung & Start", "description": "Erste Großeinkäufe an Zutaten und Verpackung für die ersten Einsätze auf der Straße." }
+        {
+          "index": "01",
+          "title": "Foodtruck-Kauf",
+          "description": "Anschaffung eines gebrauchten, TÜV-geprüften Transporters als Basis für die mobile Küche."
+        },
+        {
+          "index": "02",
+          "title": "Küchenumbau",
+          "description": "Einbau von Herd, Kühlung und Spüle sowie Abnahme durch das Gesundheitsamt."
+        },
+        {
+          "index": "03",
+          "title": "Erstausstattung & Start",
+          "description": "Erste Großeinkäufe an Zutaten und Verpackung für die ersten Einsätze auf der Straße."
+        }
       ],
       "news": [
         {
@@ -125,7 +177,7 @@
       ]
     },
     {
-      "address": "0x6e0b4d6f8a0c2e4b6d8f0a2c4e6b8d0f2a46a2c5",
+      "address": "0xA22D78bc37cE77FeE1c44F0C2C0d2524318570c3",
       "id": "wiederaufforstung-eifel",
       "verified": true,
       "title": "Wiederaufforstung Eifel",
@@ -137,9 +189,21 @@
       "image": "uploads/wiederaufforstung-eifel/cover.jpg",
       "category": "Umwelt",
       "milestones": [
-        { "index": "01", "title": "Flächensicherung", "description": "Pacht und rechtliche Sicherung der Aufforstungsflächen in Abstimmung mit dem Forstamt." },
-        { "index": "02", "title": "Setzlinge & Material", "description": "Einkauf von 10.000 heimischen Setzlingen, Wildschutz und Pflanzwerkzeug." },
-        { "index": "03", "title": "Pflanzaktionen", "description": "Organisation der Pflanzwochenenden mit Freiwilligen und anschließende Erstpflege." }
+        {
+          "index": "01",
+          "title": "Flächensicherung",
+          "description": "Pacht und rechtliche Sicherung der Aufforstungsflächen in Abstimmung mit dem Forstamt."
+        },
+        {
+          "index": "02",
+          "title": "Setzlinge & Material",
+          "description": "Einkauf von 10.000 heimischen Setzlingen, Wildschutz und Pflanzwerkzeug."
+        },
+        {
+          "index": "03",
+          "title": "Pflanzaktionen",
+          "description": "Organisation der Pflanzwochenenden mit Freiwilligen und anschließende Erstpflege."
+        }
       ],
       "news": [
         {
