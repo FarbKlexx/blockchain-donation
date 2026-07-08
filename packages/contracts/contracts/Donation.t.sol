@@ -8,7 +8,6 @@ import{console2} from "forge-std/console2.sol";
 
 contract DonationTest is Test {
   Donation donation;
-  address[] validators; 
   address owner;
   uint256[] milestoneAmounts;
   string[] milestoneDescriptions;
@@ -17,8 +16,6 @@ contract DonationTest is Test {
   uint256 donationGoal;
 
   function setUp() public {
-    validators.push(makeAddr("a"));
-    validators.push(makeAddr("b"));
     owner = makeAddr("owner");
     milestoneAmounts.push(2 ether);
     milestoneAmounts.push(4 ether);
@@ -30,7 +27,7 @@ contract DonationTest is Test {
     milestoneDescriptions.push("description2");
     milestoneDescriptions.push("description3");
 
-    donation = new Donation(owner, validators, description, duration, milestoneAmounts, milestoneDescriptions);
+    donation = new Donation(owner, description, duration, milestoneAmounts, milestoneDescriptions);
   }
 
   function test_InitialDonations() public view {
@@ -41,11 +38,6 @@ contract DonationTest is Test {
     assertEq(donation.start() + duration, donation.end());
   }
 
-  function test_InitialValidators() public view{
-    for (uint i = 0; i < validators.length; i++){
-      require(donation.getValidator(i) == validators[i]);
-    }
-  }
 
   function test_InitialDescription() public view {
     assertEq(donation.description(), "This is a description");
@@ -126,6 +118,7 @@ contract DonationTest is Test {
     donation.donate{value: donationGoal / 2}();
     require(donation.currentStatus() == Donation.Status.ToBeApproved);
 
+    address[] memory validators = donation.getValidators();
     for(uint256 i = 0; i < validators.length; i++){
       vm.prank(validators[i]);
       donation.voteProjectSetup(true);
@@ -149,6 +142,7 @@ contract DonationTest is Test {
   function test_MilestoneVoteByValidator() public {
     donation.donate{value: donationGoal}();
 
+    address[] memory validators = donation.getValidators();
     for(uint256 i = 0; i < validators.length; i++){
       vm.prank(validators[i]);
       donation.voteProjectSetup(true);
@@ -184,6 +178,7 @@ contract DonationTest is Test {
     donation.donate{value: donationGoal}();
     uint256 milestoneIndex = donation.currentMilestoneIndex();
 
+    address[] memory validators = donation.getValidators();
     vm.prank(validators[0]);
     vm.expectRevert();
     donation.voteMilestone(milestoneIndex+1, true);
@@ -192,6 +187,7 @@ contract DonationTest is Test {
   function test_VoteByValidatorMakesProjectFailedDuringPayout() public {
     donation.donate{value: donationGoal}();
 
+    address[] memory validators = donation.getValidators();
     for(uint256 i = 0; i < validators.length; i++){
       vm.prank(validators[i]);
       donation.voteProjectSetup(true);
@@ -246,6 +242,7 @@ contract DonationTest is Test {
   function test_MarkAsFailedDueToExpiredMilestoneVoting() public {
     donation.donate{value: donationGoal}();
 
+    address[] memory validators = donation.getValidators();
     for(uint256 i = 0; i < validators.length; i++){
       vm.prank(validators[i]);
       donation.voteProjectSetup(true);
@@ -274,6 +271,7 @@ contract DonationTest is Test {
   function test_MarkAsFailedDueToExpiredMilestoneVotingWithinDeadline() public {
     donation.donate{value: donationGoal}();
 
+    address[] memory validators = donation.getValidators();
     for(uint256 i = 0; i < validators.length; i++){
       vm.prank(validators[i]);
       donation.voteProjectSetup(true);
@@ -316,6 +314,8 @@ contract DonationTest is Test {
 
   function test_EndByOwnerDuringPayout() public {
     donation.donate{value: donationGoal}();
+
+    address[] memory validators = donation.getValidators();
     for(uint256 i = 0; i < validators.length; i++){
       vm.prank(validators[i]);
       donation.voteProjectSetup(true);

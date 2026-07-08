@@ -40,7 +40,7 @@ contract DonationFactoryTest is Test {
 
         vm.prank(owner);
 
-        address donationAddress = factory.createDonation(validators, "Description", 30 days, milestoneAmounts1, milestoneDescriptions1);
+        address donationAddress = factory.createDonation("Description", 30 days, milestoneAmounts1, milestoneDescriptions1);
 
         assertTrue(donationAddress != address(0));
     }
@@ -49,7 +49,7 @@ contract DonationFactoryTest is Test {
 
         vm.prank(owner);
 
-        address donationAddress = factory.createDonation( validators, "Test", 1 days, milestoneAmounts1, milestoneDescriptions1);
+        address donationAddress = factory.createDonation("Test", 1 days, milestoneAmounts1, milestoneDescriptions1);
 
         assertEq(factory.getProjectCount(), 1);
         assertEq(factory.projects(0), donationAddress);
@@ -59,7 +59,7 @@ contract DonationFactoryTest is Test {
 
         vm.prank(owner);
 
-        address donationAddress = factory.createDonation( validators, "Project", 7 days, milestoneAmounts1, milestoneDescriptions1);
+        address donationAddress = factory.createDonation("Project", 7 days, milestoneAmounts1, milestoneDescriptions1);
 
         Donation donation = Donation(donationAddress);
 
@@ -75,8 +75,8 @@ contract DonationFactoryTest is Test {
         milestoneDescriptions2[1] = "milestone2";
 
         vm.startPrank(owner);
-        factory.createDonation( validators, "A", 1 days, milestoneAmounts1, milestoneDescriptions1);
-        factory.createDonation( validators, "B", 1 days, milestoneAmounts2, milestoneDescriptions2);
+        factory.createDonation("A", 1 days, milestoneAmounts1, milestoneDescriptions1);
+        factory.createDonation("B", 1 days, milestoneAmounts2, milestoneDescriptions2);
         vm.stopPrank();
 
         assertEq(factory.getProjectCount(), 2);
