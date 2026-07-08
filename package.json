@@ -12,7 +12,8 @@
     "test:contracts": "npm run test -w contracts",
     "node": "npm run node -w contracts",
     "deploy:local": "npm run deploy:local -w contracts",
-    "deploy:sepolia": "npm run deploy:sepolia -w contracts"
+    "deploy:sepolia": "npm run deploy:sepolia -w contracts",
+    "deploy:donations": "npm run deploy:donations -w contracts"
   },
   "engines": {
     "node": "^22.13.0"
