@@ -30,7 +30,7 @@ contract Donation{
     ///stores the total donations per donor
     mapping(address => uint256) public donations;
 
-    uint256 constant validatorMinimumDonation = 1 ether;
+    uint256 constant validatorMinimumDonation = 10000000 gwei;
     uint256 constant validatorCount = 5;
     address[] public validators;
     ///makes check whether adress is a validator cheap and fast
