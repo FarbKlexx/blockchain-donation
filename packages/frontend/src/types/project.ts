@@ -26,11 +26,12 @@ export interface Milestone {
   allocated: number
   status: MilestoneStatus
   /** Validators who have approved THIS milestone so far (`approvedCount`). In the
-   *  contract their approval is what releases the NEXT milestone's payout. */
+   *  contract their approval is what releases THIS milestone's own payout — every
+   *  milestone, the first included, must clear this vote before its funds go out. */
   confirmations: number
   /** Size of the validator set (denominator for the confirmation display). */
   totalValidators: number
-  /** Approvals needed to release the next milestone — a 66.66% majority of the
+  /** Approvals needed to release this milestone — a 66.66% majority of the
    *  validator set. The contract's `neededVoteMajorityInBps` is a non-public
    *  constant (no getter), so the frontend mirrors the literal (NOT every
    *  validator). */

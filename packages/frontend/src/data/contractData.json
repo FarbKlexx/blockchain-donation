@@ -1,5 +1,5 @@
 {
-  "_comment": "MOCK of SOURCE 1: the on-chain state, shaped exactly like the Donation / DonationFactory contracts (branch contractDonation). The frontend reads these via ethers.js: the campaign list = DonationFactory.getProjects() (address[]); per campaign the Donation getters (donationGoal, totalDonations, getDonors(), start, end, currentStatus, currentMilestoneIndex, totalPayout, milestoneVotingDeadline, refundableBalance, getValidators(), getMilestones()). Amounts are the chain's NATIVE coin (donate() takes msg.value; no ERC-20 token) and are shown here as human-readable whole-coin numbers (on-chain they are wei, converted via parseEther/formatEther at the ethers boundary). Joined to projectMetadata.json by `address` (the unique project id). Only raw on-chain values live here — anything the UI shows that looks computed is DERIVED in projectsService: 'days left'/'time left' from `end`; milestone 'status' from paid/votingFinished/currentMilestoneIndex+currentStatus; project laufend/abgelaufen from currentStatus+end; approvals-needed from the 66.66% majority constant; donor COUNT from the length of the `donors` address list (a mapping has no on-chain count). Each milestone's `amount` is absolute and all amounts sum to `donationGoal`. VOTING MODEL: milestone 0 is paid immediately once funding succeeds; every later milestone is released only after validators approve the PREVIOUS one, so a milestone's approvedCount/rejectedCount are the votes cast on it after payout (the milestone being voted on is currentMilestoneIndex-1, while milestoneVotingDeadline is in the future and its votingFinished is false). The contract also stores an on-chain project `description` and per-milestone `description`, but the frontend ignores them — all display text comes from projectMetadata.json.",
+  "_comment": "MOCK of SOURCE 1: the on-chain state, shaped exactly like the Donation / DonationFactory contracts (branch contractDonation). The frontend reads these via ethers.js: the campaign list = DonationFactory.getProjects() (address[]); per campaign the Donation getters (donationGoal, totalDonations, getDonors(), start, end, currentStatus, currentMilestoneIndex, totalPayout, milestoneVotingDeadline, refundableBalance, getValidators(), getMilestones()). Amounts are the chain's NATIVE coin (donate() takes msg.value; no ERC-20 token) and are shown here as human-readable whole-coin numbers (on-chain they are wei, converted via parseEther/formatEther at the ethers boundary). Joined to projectMetadata.json by `address` (the unique project id). Only raw on-chain values live here — anything the UI shows that looks computed is DERIVED in projectsService: 'days left'/'time left' from `end`; milestone 'status' from paid/votingFinished/currentMilestoneIndex+currentStatus; project laufend/abgelaufen from currentStatus+end; approvals-needed from the 66.66% majority constant; donor COUNT from the length of the `donors` address list (a mapping has no on-chain count). Each milestone's `amount` is absolute and all amounts sum to `donationGoal`. VOTING MODEL: once funding succeeds, EVERY milestone — including the first — is released only after validators approve it, so a milestone's approvedCount/rejectedCount are the votes cast on it BEFORE payout (the milestone being voted on is currentMilestoneIndex, still unpaid, while milestoneVotingDeadline is in the future and its votingFinished is false); approving it releases its own payout. The contract also stores an on-chain project `description` and per-milestone `description`, but the frontend ignores them — all display text comes from projectMetadata.json.",
   "campaigns": [
     {
       "address": "0x7f4b2c9d1e3a5f7c8b0d2e4a6c8f1b3d5e7089a2",
@@ -156,7 +156,7 @@
       "start": 1771142400,
       "end": 1777579200,
       "currentStatus": "Closed",
-      "currentMilestoneIndex": 2,
+      "currentMilestoneIndex": 3,
       "totalPayout": 40000,
       "milestoneVotingDeadline": 0,
       "refundableBalance": 0,
@@ -168,7 +168,7 @@
       "milestones": [
         { "amount": 10000, "approvedCount": 3, "rejectedCount": 0, "votingFinished": true, "paid": true },
         { "amount": 15000, "approvedCount": 3, "rejectedCount": 0, "votingFinished": true, "paid": true },
-        { "amount": 15000, "approvedCount": 0, "rejectedCount": 0, "votingFinished": false, "paid": true }
+        { "amount": 15000, "approvedCount": 3, "rejectedCount": 0, "votingFinished": true, "paid": true }
       ]
     },
     {
@@ -236,8 +236,8 @@
       ],
       "milestones": [
         { "amount": 3500, "approvedCount": 3, "rejectedCount": 0, "votingFinished": true, "paid": true },
-        { "amount": 1500, "approvedCount": 1, "rejectedCount": 0, "votingFinished": false, "paid": true },
-        { "amount": 1000, "approvedCount": 0, "rejectedCount": 0, "votingFinished": false, "paid": false }
+        { "amount": 1500, "approvedCount": 3, "rejectedCount": 0, "votingFinished": true, "paid": true },
+        { "amount": 1000, "approvedCount": 1, "rejectedCount": 0, "votingFinished": false, "paid": false }
       ]
     },
     {
