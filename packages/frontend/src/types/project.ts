@@ -101,6 +101,17 @@ export interface Project {
    *  pays this one; validators vote on `currentMilestoneIndex - 1` (the last paid
    *  one, whose approval unlocks this payout). */
   currentMilestoneIndex: number
+  /** Project-setup approval vote — validators confirm the project start to move
+   *  it from ToBeApproved into Payout. Only actionable while
+   *  `contractStatus === 'ToBeApproved'`. */
+  projectSetup: {
+    approvedCount: number
+    rejectedCount: number
+    votingFinished: boolean
+    /** Approvals needed — the same 66.66% majority as milestones. */
+    requiredApprovals: number
+    totalValidators: number
+  }
   funding: Funding
   contract: ContractInfo
   validators: Validator[]

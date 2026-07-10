@@ -2,7 +2,7 @@
   "_comment": "MOCK of SOURCE 2: the backend API (off-chain metadata). Human-readable content the frontend will later fetch over REST — texts, images, news, milestone titles/descriptions. Joined onto contractData.json by `address` (the on-chain contract address, stored here as the project's unique id); milestones join by array position. `id` is a human slug used only for routes. `verified` is a backend assertion (NOT on-chain). Validators are not here — they are anonymous on-chain addresses from the contract.",
   "projects": [
     {
-      "address": "0xa16E02E87b7454126E5E10d957A927A7F5B5d2be",
+      "address": "0xCafac3dD18aC6c6e92c921884f9E4176737C052c",
       "id": "burger-restaurant",
       "verified": true,
       "title": "Burger Restaurant",
@@ -58,7 +58,7 @@
       ]
     },
     {
-      "address": "0xB7A5bd0345EF1Cc5E66bf61BdeC17D2461fBd968",
+      "address": "0x9f1ac54BEF0DD2f6f3462EA0fa94fC62300d3a8e",
       "id": "mesh-netzwerk-festivals",
       "verified": true,
       "title": "Mesh-Netzwerk für Festivals",
@@ -99,7 +99,7 @@
       ]
     },
     {
-      "address": "0xeEBe00Ac0756308ac4AaBfD76c05c4F3088B8883",
+      "address": "0xbf9fBFf01664500A33080Da5d437028b07DFcC55",
       "id": "roguelike-aetherbound",
       "verified": true,
       "title": "Roguelike „Aetherbound“",
@@ -139,7 +139,7 @@
       ]
     },
     {
-      "address": "0x10C6E9530F1C1AF873a391030a1D9E8ed0630D26",
+      "address": "0x93b6BDa6a0813D808d75aA42e900664Ceb868bcF",
       "id": "mobile-suppenkueche-berlin",
       "verified": true,
       "title": "Mobile Suppenküche Berlin",
@@ -177,7 +177,7 @@
       ]
     },
     {
-      "address": "0x603E1BD79259EbcbAaeD0c83eeC09cA0B89a5bcC",
+      "address": "0xA22D78bc37cE77FeE1c44F0C2C0d2524318570c3",
       "id": "wiederaufforstung-eifel",
       "verified": true,
       "title": "Wiederaufforstung Eifel",
@@ -216,6 +216,70 @@
           ]
         }
       ]
+    },
+    {
+      "address": "0x0ed2E86FcE2e5A7965f59708c01f88a722BC7f07",
+      "id": "gemeinschaftsgarten-lindenau",
+      "verified": false,
+      "title": "Gemeinschaftsgarten Lindenau",
+      "summary": "Ein Nachbarschaftsgarten auf einer Brachfläche – mit Hochbeeten, Obstbäumen und einem offenen Treffpunkt für alle im Viertel.",
+      "description": [
+        "Auf einer ungenutzten Brachfläche im Stadtteil Lindenau soll ein offener Gemeinschaftsgarten entstehen: Hochbeete zum Selbstbepflanzen, ein kleiner Obsthain und ein überdachter Treffpunkt für Workshops und Nachbarschaftsfeste.",
+        "Das Projekt ist finanziert – jetzt bestätigen die Validatoren den Projektstart, bevor die erste Auszahlung an das Team freigegeben wird.",
+        "Mit den Mitteln finanzieren wir die Bodenaufbereitung, das Baumaterial für Beete und Treffpunkt sowie die Erstbepflanzung."
+      ],
+      "image": "uploads/wiederaufforstung-eifel/cover.jpg",
+      "category": "Umwelt",
+      "milestones": [
+        {
+          "index": "01",
+          "title": "Fläche & Bodenaufbereitung",
+          "description": "Entsiegelung der Brachfläche, Anlieferung von Mutterboden und Einzäunung des Geländes."
+        },
+        {
+          "index": "02",
+          "title": "Beete & Treffpunkt",
+          "description": "Bau der Hochbeete und Errichtung des überdachten Treffpunkts inklusive Wasseranschluss."
+        },
+        {
+          "index": "03",
+          "title": "Erstbepflanzung & Eröffnung",
+          "description": "Obstbäume, Saatgut und Werkzeug für den Start sowie ein Eröffnungsfest fürs Viertel."
+        }
+      ],
+      "news": []
+    },
+    {
+      "address": "0xf433C50017d963b6082043445bCD0A54716DDC1d",
+      "id": "open-air-kino-hinterhof",
+      "verified": false,
+      "title": "Open-Air-Kino im Hinterhof",
+      "summary": "Ein ehrenamtliches Sommerkino im Innenhof – die Kampagne erreichte ihr Finanzierungsziel leider nicht rechtzeitig.",
+      "description": [
+        "Geplant war ein wöchentliches Open-Air-Kino in einem begrünten Hinterhof: Leinwand, Beamer, Sitzgelegenheiten und ein Programm aus Indie- und Nachbarschaftsfilmen.",
+        "Die Finanzierungsphase ist abgelaufen, bevor das Ziel erreicht wurde. Das Projekt gilt damit als gescheitert – die eingezahlten Beträge können von den Spendern anteilig zurückgefordert werden.",
+        "Danke an alle, die unterstützt haben. Vielleicht klappt es in einer nächsten Runde."
+      ],
+      "image": "uploads/mesh-netzwerk-festivals/cover.jpg",
+      "category": "Kultur",
+      "milestones": [
+        {
+          "index": "01",
+          "title": "Technik & Leinwand",
+          "description": "Beamer, Soundanlage und eine wetterfeste Leinwand."
+        },
+        {
+          "index": "02",
+          "title": "Bestuhlung & Hof",
+          "description": "Sitzgelegenheiten, Beleuchtung und Herrichtung des Innenhofs."
+        },
+        {
+          "index": "03",
+          "title": "Programm & Lizenzen",
+          "description": "Filmlizenzen und Programmgestaltung für die erste Saison."
+        }
+      ],
+      "news": []
     }
   ]
 }

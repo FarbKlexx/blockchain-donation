@@ -81,10 +81,20 @@ export interface ContractCampaign {
   end: number
   /** Lifecycle state (`currentStatus`). The UI's laufend/abgelaufen is derived. */
   currentStatus: ContractStatus
-  /** Index of the milestone to be paid NEXT (`currentMilestoneIndex`). This is
-   *  also the milestone currently up for a vote (still unpaid); approving it
-   *  releases its own payout. */
+  /** Index of the milestone to be paid NEXT (`currentMilestoneIndex`). The
+   *  milestone currently up for a vote is the LAST PAID one,
+   *  `currentMilestoneIndex - 1`: a milestone is voted on AFTER it is paid, and
+   *  its approval unlocks THIS one's payout. */
   currentMilestoneIndex: number
+  /** Project-setup approval vote (`projectSetup`) — validators' vote to move the
+   *  campaign from ToBeApproved into Payout (must pass before ANY milestone is
+   *  paid). `approvedCount`/`rejectedCount` are votes cast; `votingFinished` once
+   *  decided. Only meaningful while `currentStatus === 'ToBeApproved'`. */
+  projectSetup: {
+    approvedCount: number
+    rejectedCount: number
+    votingFinished: boolean
+  }
   /** Funds released across all milestones so far (`totalPayout`). */
   totalPayout: number
   /** Unix seconds until which the open milestone vote runs

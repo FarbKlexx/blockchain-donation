@@ -39,11 +39,40 @@
         "0x55a1c3e5b7d9f0a2c4e6b8d0f2a4c6e8b0d2f491"
       ],
       "milestones": [
-        { "amount": 11880, "approvedCount": 0, "rejectedCount": 0, "votingFinished": false, "paid": false },
-        { "amount": 23760, "approvedCount": 0, "rejectedCount": 0, "votingFinished": false, "paid": false },
-        { "amount": 18480, "approvedCount": 0, "rejectedCount": 0, "votingFinished": false, "paid": false },
-        { "amount": 11880, "approvedCount": 0, "rejectedCount": 0, "votingFinished": false, "paid": false }
-      ]
+        {
+          "amount": 11880,
+          "approvedCount": 0,
+          "rejectedCount": 0,
+          "votingFinished": false,
+          "paid": false
+        },
+        {
+          "amount": 23760,
+          "approvedCount": 0,
+          "rejectedCount": 0,
+          "votingFinished": false,
+          "paid": false
+        },
+        {
+          "amount": 18480,
+          "approvedCount": 0,
+          "rejectedCount": 0,
+          "votingFinished": false,
+          "paid": false
+        },
+        {
+          "amount": 11880,
+          "approvedCount": 0,
+          "rejectedCount": 0,
+          "votingFinished": false,
+          "paid": false
+        }
+      ],
+      "projectSetup": {
+        "approvedCount": 0,
+        "rejectedCount": 0,
+        "votingFinished": false
+      }
     },
     {
       "address": "0x3a1d8c2b4e6f0a9c7b5d3e1f8a06c4b2d9e177be",
@@ -77,10 +106,33 @@
         "0x55a1c3e5b7d9f0a2c4e6b8d0f2a4c6e8b0d2f491"
       ],
       "milestones": [
-        { "amount": 6000, "approvedCount": 0, "rejectedCount": 0, "votingFinished": false, "paid": false },
-        { "amount": 5100, "approvedCount": 0, "rejectedCount": 0, "votingFinished": false, "paid": false },
-        { "amount": 3900, "approvedCount": 0, "rejectedCount": 0, "votingFinished": false, "paid": false }
-      ]
+        {
+          "amount": 6000,
+          "approvedCount": 0,
+          "rejectedCount": 0,
+          "votingFinished": false,
+          "paid": false
+        },
+        {
+          "amount": 5100,
+          "approvedCount": 0,
+          "rejectedCount": 0,
+          "votingFinished": false,
+          "paid": false
+        },
+        {
+          "amount": 3900,
+          "approvedCount": 0,
+          "rejectedCount": 0,
+          "votingFinished": false,
+          "paid": false
+        }
+      ],
+      "projectSetup": {
+        "approvedCount": 0,
+        "rejectedCount": 0,
+        "votingFinished": false
+      }
     },
     {
       "address": "0x9c2e7b4d1a8f3c6b0d5e9a2f7c1b8d6e304541af",
@@ -166,10 +218,33 @@
         "0x55a1c3e5b7d9f0a2c4e6b8d0f2a4c6e8b0d2f491"
       ],
       "milestones": [
-        { "amount": 10000, "approvedCount": 3, "rejectedCount": 0, "votingFinished": true, "paid": true },
-        { "amount": 15000, "approvedCount": 3, "rejectedCount": 0, "votingFinished": true, "paid": true },
-        { "amount": 15000, "approvedCount": 3, "rejectedCount": 0, "votingFinished": true, "paid": true }
-      ]
+        {
+          "amount": 10000,
+          "approvedCount": 3,
+          "rejectedCount": 0,
+          "votingFinished": true,
+          "paid": true
+        },
+        {
+          "amount": 15000,
+          "approvedCount": 3,
+          "rejectedCount": 0,
+          "votingFinished": true,
+          "paid": true
+        },
+        {
+          "amount": 15000,
+          "approvedCount": 3,
+          "rejectedCount": 0,
+          "votingFinished": true,
+          "paid": true
+        }
+      ],
+      "projectSetup": {
+        "approvedCount": 3,
+        "rejectedCount": 0,
+        "votingFinished": true
+      }
     },
     {
       "address": "0x4d8f1a3c5e7b9d0a2c4e6f8b1d3a5c7e9f040b73",
@@ -235,10 +310,33 @@
         "0x55a1c3e5b7d9f0a2c4e6b8d0f2a4c6e8b0d2f491"
       ],
       "milestones": [
-        { "amount": 3500, "approvedCount": 3, "rejectedCount": 0, "votingFinished": true, "paid": true },
-        { "amount": 1500, "approvedCount": 3, "rejectedCount": 0, "votingFinished": true, "paid": true },
-        { "amount": 1000, "approvedCount": 1, "rejectedCount": 0, "votingFinished": false, "paid": false }
-      ]
+        {
+          "amount": 3500,
+          "approvedCount": 3,
+          "rejectedCount": 0,
+          "votingFinished": true,
+          "paid": true
+        },
+        {
+          "amount": 1500,
+          "approvedCount": 3,
+          "rejectedCount": 0,
+          "votingFinished": true,
+          "paid": true
+        },
+        {
+          "amount": 1000,
+          "approvedCount": 1,
+          "rejectedCount": 0,
+          "votingFinished": false,
+          "paid": false
+        }
+      ],
+      "projectSetup": {
+        "approvedCount": 3,
+        "rejectedCount": 0,
+        "votingFinished": true
+      }
     },
     {
       "address": "0x6e0b4d6f8a0c2e4b6d8f0a2c4e6b8d0f2a46a2c5",
@@ -287,9 +385,131 @@
         "0x55a1c3e5b7d9f0a2c4e6b8d0f2a4c6e8b0d2f491"
       ],
       "milestones": [
-        { "amount": 8100, "approvedCount": 0, "rejectedCount": 0, "votingFinished": false, "paid": false },
-        { "amount": 12000, "approvedCount": 0, "rejectedCount": 0, "votingFinished": false, "paid": false },
-        { "amount": 9900, "approvedCount": 0, "rejectedCount": 0, "votingFinished": false, "paid": false }
+        {
+          "amount": 8100,
+          "approvedCount": 0,
+          "rejectedCount": 0,
+          "votingFinished": false,
+          "paid": false
+        },
+        {
+          "amount": 12000,
+          "approvedCount": 0,
+          "rejectedCount": 0,
+          "votingFinished": false,
+          "paid": false
+        },
+        {
+          "amount": 9900,
+          "approvedCount": 0,
+          "rejectedCount": 0,
+          "votingFinished": false,
+          "paid": false
+        }
+      ],
+      "projectSetup": {
+        "approvedCount": 0,
+        "rejectedCount": 0,
+        "votingFinished": false
+      }
+    },
+    {
+      "address": "0x9a8b7c6d5e4f30211f2e3d4c5b6a70819e0d1c2b",
+      "contractOwner": "0xd4e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d",
+      "donationGoal": 9000,
+      "totalDonations": 9000,
+      "donors": [
+        "0xa11ce00000000000000000000000000000000001",
+        "0xb0b0000000000000000000000000000000000002",
+        "0xca01000000000000000000000000000000000003",
+        "0xda1d000000000000000000000000000000000004"
+      ],
+      "start": 1778396400,
+      "end": 1783080000,
+      "currentStatus": "ToBeApproved",
+      "currentMilestoneIndex": 0,
+      "totalPayout": 0,
+      "votingDeadline": 1788000000,
+      "refundableBalance": 0,
+      "projectSetup": {
+        "approvedCount": 0,
+        "rejectedCount": 0,
+        "votingFinished": false
+      },
+      "validators": [
+        "0xa11ce00000000000000000000000000000000001",
+        "0xb0b0000000000000000000000000000000000002",
+        "0xca01000000000000000000000000000000000003"
+      ],
+      "milestones": [
+        {
+          "amount": 4000,
+          "approvedCount": 0,
+          "rejectedCount": 0,
+          "votingFinished": false,
+          "paid": false
+        },
+        {
+          "amount": 3000,
+          "approvedCount": 0,
+          "rejectedCount": 0,
+          "votingFinished": false,
+          "paid": false
+        },
+        {
+          "amount": 2000,
+          "approvedCount": 0,
+          "rejectedCount": 0,
+          "votingFinished": false,
+          "paid": false
+        }
+      ]
+    },
+    {
+      "address": "0x7c6d5e4f3a2b1c0d9e8f70615243342516071829",
+      "contractOwner": "0xd4e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d",
+      "donationGoal": 20000,
+      "totalDonations": 6000,
+      "donors": [
+        "0xa11ce00000000000000000000000000000000005",
+        "0xb0b0000000000000000000000000000000000006",
+        "0xca01000000000000000000000000000000000007"
+      ],
+      "start": 1778396400,
+      "end": 1778400000,
+      "currentStatus": "Failed",
+      "currentMilestoneIndex": 0,
+      "totalPayout": 0,
+      "votingDeadline": 0,
+      "refundableBalance": 6000,
+      "projectSetup": {
+        "approvedCount": 0,
+        "rejectedCount": 0,
+        "votingFinished": false
+      },
+      "validators": [],
+      "milestones": [
+        {
+          "amount": 8000,
+          "approvedCount": 0,
+          "rejectedCount": 0,
+          "votingFinished": false,
+          "paid": false
+        },
+        {
+          "amount": 7000,
+          "approvedCount": 0,
+          "rejectedCount": 0,
+          "votingFinished": false,
+          "paid": false
+        },
+        {
+          "amount": 5000,
+          "approvedCount": 0,
+          "rejectedCount": 0,
+          "votingFinished": false,
+          "paid": false
+        }
       ]
     }
   ]

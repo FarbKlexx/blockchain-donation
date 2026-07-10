@@ -212,6 +212,13 @@ function mergeProject(c: ContractCampaign, m: ProjectMetadata): Project {
     status: deriveProjectStatus(c),
     contractStatus: c.currentStatus,
     currentMilestoneIndex: c.currentMilestoneIndex,
+    projectSetup: {
+      approvedCount: c.projectSetup?.approvedCount ?? 0,
+      rejectedCount: c.projectSetup?.rejectedCount ?? 0,
+      votingFinished: c.projectSetup?.votingFinished ?? false,
+      requiredApprovals: required,
+      totalValidators: c.validators.length,
+    },
     funding: toFunding(c),
     contract: {
       // Explorer URL/label are derived from the on-chain address here, NOT
