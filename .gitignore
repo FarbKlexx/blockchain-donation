@@ -21,3 +21,5 @@ Thumbs.db
 CLAUDE.md
 
 *.db
+
+__pycache__/
