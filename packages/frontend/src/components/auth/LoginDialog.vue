@@ -14,7 +14,9 @@ const wallet = useWalletStore()
 const isDev = import.meta.env.DEV
 
 async function pick(user: MockUser) {
-  await wallet.login(user.address)
+  // Address + key together: the persona is both the shown identity AND the
+  // signer, so its transactions actually come from this account.
+  await wallet.login(user.address, user.privateKey)
   emit('close')
 }
 

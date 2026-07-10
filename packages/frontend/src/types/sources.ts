@@ -24,7 +24,7 @@
 
 /** On-chain campaign lifecycle — the contract's `Status` enum (read as a uint8
  *  index 0..3 via ethers, mapped to this string in projectsService). */
-export type ContractStatus = 'Funding' | 'Payout' | 'Failed' | 'Closed'
+export type ContractStatus = 'Funding' | 'ToBeApproved' | 'Payout' | 'Failed' | 'Closed'
 
 /** Per-milestone state — the on-chain `Milestone` struct (one entry per index
  *  0..milestoneCount-1, in order), minus the on-chain `description` string the
@@ -88,9 +88,9 @@ export interface ContractCampaign {
   /** Funds released across all milestones so far (`totalPayout`). */
   totalPayout: number
   /** Unix seconds until which the open milestone vote runs
-   *  (`milestoneVotingDeadline`). 0 = no vote currently open; a future value =
+   *  (`votingDeadline`). 0 = no vote currently open; a future value =
    *  validators may still vote on `currentMilestoneIndex`. */
-  milestoneVotingDeadline: number
+  votingDeadline: number
   /** Amount set aside for proportional donor refunds, fixed at the moment the
    *  project fails (`refundableBalance`). 0 unless `currentStatus === 'Failed'`. */
   refundableBalance: number

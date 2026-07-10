@@ -34,7 +34,7 @@ function requireFactoryAddress(): string {
 }
 
 // Mapping uint8 from the chain to String for the frontend
-const STATUS_MAP = ['Funding', 'Payout', 'Failed', 'Closed'] as const;
+const STATUS_MAP = ['Funding', 'ToBeApproved', 'Payout', 'Failed', 'Closed'] as const;
 
 // Reads (listing campaigns, role scans) never need a wallet — only writes do.
 // Prefers the local RPC endpoint so the project grid works with no wallet
@@ -46,9 +46,38 @@ function getReadProvider(): ethers.Provider {
   throw new Error('Keine RPC-Verbindung verfügbar (weder VITE_RPC_URL noch eine Krypto-Wallet).')
 }
 
+// ── Active dev signer ────────────────────────────────────────────────────────
+// The signer MUST be the logged-in account, otherwise the UI identity and the
+// transaction sender diverge (donations credited to the .env key's address
+// instead of the persona). The wallet store sets this on login/logout with the
+// persona's Hardhat TEST key; when unset, writes fall back to
+// VITE_DEV_PRIVATE_KEY (and the connect path then logs in as that key's
+// address, so address and signer stay in sync on every path).
+let activeDevKey: string | null = null
+
+/** Switch the dev signing key to the logged-in account (null = fall back to
+ *  VITE_DEV_PRIVATE_KEY / injected wallet). `forAddress` guards against a
+ *  persona whose key and address drifted apart — fail loudly, not with a
+ *  silently wrong sender. */
+export function setActiveSignerKey(key: string | null, forAddress?: string): void {
+  if (key && forAddress) {
+    const derived = new ethers.Wallet(key).address
+    if (derived.toLowerCase() !== forAddress.toLowerCase()) {
+      throw new Error(
+        `Signer-Key passt nicht zur Adresse: Key gehört zu ${derived}, angemeldet ist ${forAddress}.`,
+      )
+    }
+  }
+  activeDevKey = key
+}
+
+function currentDevKey(): string | undefined {
+  return activeDevKey ?? import.meta.env.VITE_DEV_PRIVATE_KEY
+}
+
 async function getBlockchainContext() {
-  // Dev fallback if a private key is configured, else the injected wallet:
-  const devKey = import.meta.env.VITE_DEV_PRIVATE_KEY
+  // The logged-in persona's key, else the .env dev key, else the injected wallet:
+  const devKey = currentDevKey()
   const rpcUrl = import.meta.env.VITE_RPC_URL
   if (devKey && rpcUrl) {
     const provider = new ethers.JsonRpcProvider(rpcUrl)
@@ -109,7 +138,7 @@ async function fetchCampaignByAddress(address: string): Promise<ContractCampaign
       rawStatus,
       validators,
       rawMilestones,
-      milestoneVotingDeadline,
+      votingDeadline,
       donors
     ] = await Promise.all([
       contract.contractOwner(),
@@ -121,7 +150,7 @@ async function fetchCampaignByAddress(address: string): Promise<ContractCampaign
       contract.currentStatus(),
       contract.getValidators(),
       contract.getMilestones(),
-      contract.milestoneVotingDeadline(),
+      contract.votingDeadline(),
       contract.getDonors()
     ])
 
@@ -135,7 +164,7 @@ async function fetchCampaignByAddress(address: string): Promise<ContractCampaign
       currentMilestoneIndex: Number(currentMilestoneIndex),
       currentStatus: STATUS_MAP[Number(rawStatus)] ?? 'Funding',
       totalPayout: Number(ethers.formatEther(await contract.totalPayout())),
-      milestoneVotingDeadline: Number(milestoneVotingDeadline),
+      votingDeadline: Number(votingDeadline),
       refundableBalance: Number(ethers.formatEther(await contract.refundableBalance())),
       validators: [...validators],
       donors: [...donors],
@@ -274,21 +303,27 @@ function requiredApprovals(validatorCount: number, majorityBps: number): number 
 
 /** Milestone presentation status, derived from the struct + lifecycle. Milestone
  *  funds are absolute on-chain (`amount`), so there is no allocation maths.
- *  Voting model: EVERY milestone — including the first — must be approved by the
- *  validators before its funds are released. The one validators are CURRENTLY
- *  voting on is the milestone to be paid NEXT (`currentMilestoneIndex`), still
- *  unpaid and with its vote unfinished while the project is in Payout — that one
- *  is "in_progress"; approving it releases ITS OWN payout. A paid milestone has
- *  its funds released → "completed"; any other unpaid milestone is "pending". */
+ *
+ *  Voting model (matches the contract — voting is RETROSPECTIVE): `payout(k)`
+ *  releases milestone k's funds AND opens the validator vote on milestone k;
+ *  `currentMilestoneIndex` then points at k+1. Approving milestone k is what
+ *  unlocks the payout of the NEXT milestone (approving the final one closes the
+ *  project). So the milestone currently up for a vote is the LAST PAID one,
+ *  `currentMilestoneIndex - 1`, while the project is in Payout and its vote is
+ *  still open (`!votingFinished`) — that one is "in_progress". Any paid milestone
+ *  whose vote has finished is "completed"; an unpaid milestone is "pending"
+ *  (awaiting the previous milestone's approval, then an owner payout). */
 function deriveMilestoneStatus(
   ms: ContractCampaign['milestones'][number],
   index: number,
   c: ContractCampaign,
 ): MilestoneStatus {
-  if (ms.paid) return 'completed'
+  const votableIndex = c.currentMilestoneIndex - 1
   const beingVotedOn =
-    c.currentStatus === 'Payout' && index === c.currentMilestoneIndex && !ms.votingFinished
-  return beingVotedOn ? 'in_progress' : 'pending'
+    c.currentStatus === 'Payout' && index === votableIndex && ms.paid && !ms.votingFinished
+  if (beingVotedOn) return 'in_progress'
+  if (ms.paid) return 'completed'
+  return 'pending'
 }
 
 // ── Merge: contract state (authoritative) enriched with backend metadata ─────
@@ -329,6 +364,10 @@ function mergeProject(c: ContractCampaign, m: ProjectMetadata): Project {
     // Single native coin for every campaign (donations are msg.value).
     currency: NATIVE_CURRENCY,
     status: deriveProjectStatus(c),
+    // Authoritative lifecycle passed straight through — the view derives which
+    // milestone the owner may pay / validators may vote on from these.
+    contractStatus: c.currentStatus,
+    currentMilestoneIndex: c.currentMilestoneIndex,
     funding: toFunding(c),
     contract: {
       // Explorer URL/label are derived from the on-chain address here, NOT
@@ -446,7 +485,9 @@ export async function getProject(id: string): Promise<Project | null> {
  * No key set (real wallet flow, e.g. MetaMask) → no-op.
  */
 function assertLocalSigner(): void {
-  const key = import.meta.env.VITE_DEV_PRIVATE_KEY
+  // Covers BOTH inlined key sources: the persona key set at login and the
+  // .env fallback — either one must never sign against a non-local chain.
+  const key = currentDevKey()
   if (!key) return
 
   const rpc = import.meta.env.VITE_RPC_URL
@@ -511,16 +552,18 @@ export interface VoteResult {
 }
 
 /**
- * Cast a validator's vote on the milestone currently up for a vote — the one to
- * be paid next, `currentMilestoneIndex` (approve = true, reject = false).
- * Approving it is what releases THAT milestone's own payout — every milestone,
- * including the first, must clear this vote before its funds go out. Validator-
- * only and only while voting is open — the contract enforces every precondition
- * (isValidator, Payout phase, milestone == currentMilestoneIndex, voting not
- * finished, deadline not passed, no duplicate vote); the UI only mirrors them.
- * A single approval can flip the project to Failed or unlock the next payout,
- * so the milestone/status are re-read from chain after the tx confirms rather
- * than computed client-side.
+ * Cast a validator's vote on the milestone currently up for a vote — the LAST
+ * PAID milestone, `currentMilestoneIndex - 1` (approve = true, reject = false).
+ * In this contract a milestone is voted on AFTER it is paid; approving it
+ * unlocks the payout of the NEXT milestone (approving the final one closes the
+ * project). `milestoneIndex` must therefore be `currentMilestoneIndex - 1` — the
+ * UI passes the array index of the milestone it renders as `in_progress`, which
+ * is exactly that one. Validator-only and only while voting is open — the
+ * contract enforces every precondition (isValidator, Payout phase, isLastMilestone
+ * i.e. index == currentMilestoneIndex - 1, voting not finished, deadline not
+ * passed, no duplicate vote); the UI only mirrors them. A single approval can
+ * flip the project to Failed or unlock the next payout, so the milestone/status
+ * are re-read from chain after the tx confirms rather than computed client-side.
  */
 export interface VoteMilestoneResult {
   txHash: string
@@ -538,6 +581,7 @@ export async function voteOnMilestone(
   milestoneIndex: number,
   approve: boolean
 ): Promise<VoteMilestoneResult> {
+  assertLocalSigner()
   const { signer, provider } = await getBlockchainContext()
   const donationContract = Donation__factory.connect(projectAddress, signer)
 
@@ -565,6 +609,51 @@ export async function voteOnMilestone(
       votingFinished: milestone.votingFinished,
       paid: milestone.paid
     }
+  }
+}
+
+export interface PayoutResult {
+  txHash: string
+  /** Lifecycle after the tx (paying the final milestone's vote can later close
+   *  the project; the payout itself keeps it in Payout). */
+  currentStatus: string
+  /** `currentMilestoneIndex` after the tx (incremented by one). */
+  currentMilestoneIndex: number
+}
+
+/**
+ * Owner-only: pay out the NEXT milestone (`currentMilestoneIndex`). This releases
+ * that milestone's funds AND opens the validator vote on it — whose approval then
+ * unlocks the following payout (approving the final milestone closes the project).
+ * Only in the Payout phase, and only once the PREVIOUS milestone has been approved
+ * (milestone 0 is gated instead by the project-setup vote). The contract enforces
+ * every precondition (isOwner, onlyDuringPayout, isCurrentMilestone,
+ * lastMilestoneApproved); the UI only mirrors them. Authoritative state is re-read
+ * after the tx confirms.
+ */
+export async function payoutMilestone(
+  projectAddress: string,
+  milestoneIndex: number,
+): Promise<PayoutResult> {
+  assertLocalSigner()
+  const { signer } = await getBlockchainContext()
+  const donationContract = Donation__factory.connect(projectAddress, signer)
+
+  const tx = await donationContract.payout(milestoneIndex)
+  const receipt = await tx.wait()
+  if (!receipt || receipt.status === 0) {
+    throw new Error('Die Auszahlung auf der Blockchain ist fehlgeschlagen.')
+  }
+
+  const [rawStatus, curIndex] = await Promise.all([
+    donationContract.currentStatus(),
+    donationContract.currentMilestoneIndex(),
+  ])
+
+  return {
+    txHash: tx.hash,
+    currentStatus: STATUS_MAP[Number(rawStatus)] ?? 'Funding',
+    currentMilestoneIndex: Number(curIndex),
   }
 }
 
@@ -612,7 +701,7 @@ export interface CreateProjectPayload {
     /** On-chain description (set once at creation, then immutable). */
     description: string
     /** Validator addresses — distinct, non-empty, none equal to the creator. */
-    validators: string[]
+    //validators: string[]
     /** Per-milestone funding amounts as validated decimal STRINGS (native coin)
      *  → parseEther each. The funding goal is their SUM — the contract derives it
      *  from these; there is no separate goal field. At least one, each > 0. */
@@ -656,7 +745,6 @@ export async function createProject(payload: CreateProjectPayload): Promise<Crea
 
   // deploy on chain
   const tx = await factory.createDonation(
-    payload.contract.validators,
     payload.contract.description,
     payload.contract.durationSeconds,
     milestoneWeiAmounts,

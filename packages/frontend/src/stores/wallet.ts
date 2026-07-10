@@ -1,6 +1,13 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { connectWallet, loadAccountSession, type AccountSession, type Role } from '@/services/projectsService'
+import {
+  connectWallet,
+  loadAccountSession,
+  setActiveSignerKey,
+  type AccountSession,
+  type Role,
+} from '@/services/projectsService'
+import { MOCK_USERS } from '@/services/mockUsers'
 
 // The connected-account session: the wallet address PLUS the roles/memberships
 // derived from chain at login. Single source of truth for "who am I and what
@@ -43,11 +50,19 @@ export const useWalletStore = defineStore('wallet', () => {
   }
 
   /** Core entry: adopt an address and derive its roles from chain (one scan).
-   *  Used by both the mock-user overlay and the real wallet path. */
-  async function login(addr: string) {
+   *  Used by both the mock-user overlay and the real wallet path.
+   *
+   *  `privateKey` (DEV personas only) also switches the SIGNER to this account,
+   *  so the address shown in the UI is the address every transaction is sent
+   *  from — without it, writes would sign as the .env fallback key and e.g.
+   *  a donation would be credited to a different account than the one logged
+   *  in. The real-wallet path passes no key (the wallet itself signs). */
+  async function login(addr: string, privateKey?: string) {
     if (connecting.value) return
     connecting.value = true
     try {
+      // Throws on a key/address mismatch BEFORE we adopt the identity.
+      setActiveSignerKey(privateKey ?? null, addr)
       address.value = addr
       session.value = await loadAccountSession(addr)
       sessionStorage.setItem(STORAGE_KEY, addr) // persist the address only
@@ -71,16 +86,24 @@ export const useWalletStore = defineStore('wallet', () => {
   }
 
   function logout() {
+    setActiveSignerKey(null)
     address.value = null
     session.value = null
     sessionStorage.removeItem(STORAGE_KEY)
   }
 
   /** Rehydrate a tab session on app start: read the saved address and RE-DERIVE
-   *  roles from chain (we never trust stored roles). No-op if none saved. */
+   *  roles from chain (we never trust stored roles). Only the address is
+   *  persisted — if it belongs to a DEV persona, re-attach that persona's
+   *  signing key so writes keep coming from the logged-in account after a
+   *  reload. No-op if none saved. */
   async function restore() {
     const saved = sessionStorage.getItem(STORAGE_KEY)
-    if (saved) await login(saved)
+    if (!saved) return
+    const persona = import.meta.env.DEV
+      ? MOCK_USERS.find((u) => u.address.toLowerCase() === saved.toLowerCase())
+      : undefined
+    await login(saved, persona?.privateKey)
   }
 
   return {

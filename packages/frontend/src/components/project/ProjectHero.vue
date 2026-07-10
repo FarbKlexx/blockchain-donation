@@ -71,12 +71,14 @@ async function onDonate() {
       <div class="hero__donate-wrap">
         <form class="hero__donate" :class="{ 'hero__donate--error': error }" @submit.prevent="onDonate">
           <span class="hero__currency">{{ project.currency }}</span>
+          <!-- type="text", NOT "number": Vue auto-casts v-model on number inputs
+               to a JS float, but the amount must stay a decimal STRING all the
+               way to parseEther (see utils/amount.ts). inputmode keeps the
+               numeric keyboard on mobile; validateAmount rejects bad input. -->
           <input
             v-model="amount"
             class="hero__input"
-            type="number"
-            min="0"
-            step="any"
+            type="text"
             inputmode="decimal"
             placeholder="Betrag eingeben"
             aria-label="Spendenbetrag"

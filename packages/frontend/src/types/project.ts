@@ -4,6 +4,8 @@
 // the raw shapes. Later the same merge runs over on-chain reads + the backend
 // API, keeping the UI untouched. See INTEGRATION.md for the per-field data origin.
 
+import type { ContractStatus } from './sources'
+
 export type ProjectStatus = 'laufend' | 'abgelaufen'
 
 export type MilestoneStatus = 'completed' | 'in_progress' | 'pending'
@@ -91,6 +93,14 @@ export interface Project {
    *  `msg.value`, no ERC-20 token), so it's the same for every campaign. */
   currency: string
   status: ProjectStatus
+  /** Raw on-chain lifecycle (`currentStatus`) — authoritative. `status` above is
+   *  the derived laufend/abgelaufen for cards; actions (payout, milestone vote)
+   *  gate on THIS. */
+  contractStatus: ContractStatus
+  /** Index of the milestone to be paid NEXT (`currentMilestoneIndex`). The owner
+   *  pays this one; validators vote on `currentMilestoneIndex - 1` (the last paid
+   *  one, whose approval unlocks this payout). */
+  currentMilestoneIndex: number
   funding: Funding
   contract: ContractInfo
   validators: Validator[]
