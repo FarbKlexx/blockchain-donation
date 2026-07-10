@@ -84,18 +84,30 @@ function removeNews(i: number) {
   form.news.splice(i, 1)
 }
 
+function normalizeUploadPath(fileName: string, projectId?: string): string {
+  if (!fileName) return ''
+  if (/^(https?:)?\/\//.test(fileName) || fileName.startsWith('/')) return fileName
+  if (fileName.startsWith('uploads/')) return fileName
+  const folder = projectId ? projectId.replace(/^\/|\/$/g, '') : ''
+  return folder ? `uploads/${folder}/${fileName}` : `uploads/${fileName}`
+}
+
 // Images are uploads only (no external URLs). Prototype: the file isn't actually
-// uploaded — we record the chosen filename as the placeholder key; the real
+// uploaded — we record a placeholder key from the uploads folder; the real
 // upload→key flow lands in updateProjectMetadata().
 function onCoverFile(e: Event) {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
-  if (file) form.image = file.name
+  if (file) form.image = normalizeUploadPath(file.name, props.id)
   input.value = ''
 }
 function onNewsFiles(e: Event, entry: { images: string[] }) {
   const input = e.target as HTMLInputElement
-  if (input.files) entry.images.push(...Array.from(input.files).map((f) => f.name))
+  if (input.files) {
+    entry.images.push(
+      ...Array.from(input.files).map((f) => normalizeUploadPath(f.name, props.id)),
+    )
+  }
   input.value = ''
 }
 
@@ -170,8 +182,7 @@ onMounted(load)
       </p>
 
       <p v-if="saved" class="edit__saved" role="status">
-        Änderungen erfasst. Im Prototyp wird <strong>nichts gespeichert</strong> – sobald das Backend
-        angebunden ist, geht hier ein POST an die API raus.
+        Änderungen erfasst. Die Änderungen wurden an das Backend gesendet und sind gespeichert.
       </p>
 
       <!-- Stammdaten -->

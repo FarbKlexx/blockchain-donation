@@ -108,18 +108,34 @@ function addNews() {
   form.news.push({ date: '', title: '', body: '', images: [] })
 }
 
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+}
+
+function normalizeUploadPath(fileName: string, folder?: string): string {
+  if (!fileName) return ''
+  if (/^(https?:)?\/\//.test(fileName) || fileName.startsWith('/')) return fileName
+  if (fileName.startsWith('uploads/')) return fileName
+  const cleaned = folder ? folder.replace(/^\/|\/$/g, '') : ''
+  return cleaned ? `uploads/${cleaned}/${fileName}` : `uploads/${fileName}`
+}
+
 // Images are uploads only (no external URLs). In this prototype the file isn't
 // actually uploaded — we record the chosen filename as the placeholder key the
 // backend would assign; the real upload→key flow lands in createProject().
 function onCoverFile(e: Event) {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
-  if (file) form.image = file.name
+  if (file) form.image = normalizeUploadPath(file.name, slugify(form.title))
   input.value = ''
 }
 function onNewsFiles(e: Event, entry: { images: string[] }) {
   const input = e.target as HTMLInputElement
-  if (input.files) entry.images.push(...Array.from(input.files).map((f) => f.name))
+  if (input.files) entry.images.push(...Array.from(input.files).map((f) => normalizeUploadPath(f.name, slugify(form.title))))
   input.value = ''
 }
 function removeNews(i: number) {
