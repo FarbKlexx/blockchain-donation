@@ -210,6 +210,8 @@ function mergeProject(c: ContractCampaign, m: ProjectMetadata): Project {
     // Single native coin for every campaign (donations are msg.value).
     currency: NATIVE_CURRENCY,
     status: deriveProjectStatus(c),
+    contractStatus: c.currentStatus,
+    currentMilestoneIndex: c.currentMilestoneIndex,
     funding: toFunding(c),
     contract: {
       // Explorer URL/label are derived from the on-chain address here, NOT

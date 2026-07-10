@@ -30,7 +30,7 @@ export type AmountValidation = { ok: true; value: string } | { ok: false; error:
  * than the token supports. Returns the normalized string on success.
  */
 export function validateAmount(input: string, decimals: number): AmountValidation {
-  const trimmed = input.trim()
+  const trimmed = input.toString().trim()
   if (!trimmed) return { ok: false, error: 'Bitte einen Betrag eingeben.' }
 
   // Plain decimal only — no sign, no exponent. Blocks "Infinity", "NaN",

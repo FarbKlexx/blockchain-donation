@@ -14,8 +14,8 @@ import AppIcon from '@/components/ui/AppIcon.vue'
 // Submit deploys a mock contract address and persists metadata via the backend.
 const wallet = useWalletStore()
 
-const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/
-const ZERO_ADDRESS = '0x' + '0'.repeat(40)
+// const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/
+// const ZERO_ADDRESS = '0x' + '0'.repeat(40)
 
 const form = reactive({
   // ── Backend metadata ──
@@ -28,7 +28,7 @@ const form = reactive({
   // ── Smart contract ──
   durationDays: '',
   onchainDescription: '',
-  validators: [''],
+  //validators: [''],
   // Each milestone carries an absolute funding amount (native coin). The funding
   // goal is their sum — the contract has no separate goal input.
   milestones: [{ amount: '', title: '', description: '' }],
@@ -53,7 +53,7 @@ const goalTotal = computed(() =>
   milestoneAmountChecks.value.reduce((sum, c) => (c.ok ? sum + Number(c.value) : sum), 0),
 )
 
-const filledValidators = computed(() => form.validators.map((v) => v.trim()).filter(Boolean))
+//const filledValidators = computed(() => form.validators.map((v) => v.trim()).filter(Boolean))
 
 const errors = computed(() => {
   const e: string[] = []
@@ -63,15 +63,15 @@ const errors = computed(() => {
   if (!Number.isInteger(days) || days <= 0) e.push('Laufzeit muss eine ganze Zahl an Tagen > 0 sein.')
 
   // Validators: ≥1, valid format, unique, none equal to the creator.
-  const vs = filledValidators.value
-  if (vs.length === 0) e.push('Mindestens ein Validator ist erforderlich.')
-  if (vs.some((v) => !ADDRESS_RE.test(v))) e.push('Validator-Adressen müssen das Format 0x… (40 Hex) haben.')
-  if (vs.some((v) => v.toLowerCase() === ZERO_ADDRESS))
-    e.push('Die Null-Adresse (0x000…000) ist als Validator nicht erlaubt.')
-  const lower = vs.map((v) => v.toLowerCase())
-  if (new Set(lower).size !== lower.length) e.push('Validator-Adressen müssen eindeutig sein.')
-  if (wallet.address && lower.includes(wallet.address.toLowerCase()))
-    e.push('Du selbst (Ersteller) kannst kein Validator sein.')
+  // const vs = filledValidators.value
+  // if (vs.length === 0) e.push('Mindestens ein Validator ist erforderlich.')
+  // if (vs.some((v) => !ADDRESS_RE.test(v))) e.push('Validator-Adressen müssen das Format 0x… (40 Hex) haben.')
+  // if (vs.some((v) => v.toLowerCase() === ZERO_ADDRESS))
+  //   e.push('Die Null-Adresse (0x000…000) ist als Validator nicht erlaubt.')
+  // const lower = vs.map((v) => v.toLowerCase())
+  // if (new Set(lower).size !== lower.length) e.push('Validator-Adressen müssen eindeutig sein.')
+  // if (wallet.address && lower.includes(wallet.address.toLowerCase()))
+  //   e.push('Du selbst (Ersteller) kannst kein Validator sein.')
 
   // Milestones (blank rows ignored): ≥1, each with a positive native-coin amount
   // and a title. The funding goal is the sum of the amounts (no separate goal).
@@ -92,12 +92,12 @@ function addParagraph() {
 function removeParagraph(i: number) {
   form.description.splice(i, 1)
 }
-function addValidator() {
-  form.validators.push('')
-}
-function removeValidator(i: number) {
-  form.validators.splice(i, 1)
-}
+// function addValidator() {
+//   form.validators.push('')
+// }
+// function removeValidator(i: number) {
+//   form.validators.splice(i, 1)
+// }
 function addMilestone() {
   form.milestones.push({ amount: '', title: '', description: '' })
 }
@@ -136,7 +136,7 @@ async function submit() {
       contract: {
         durationSeconds: Number(form.durationDays) * 86400,
         description: form.onchainDescription.trim(),
-        validators: filledValidators.value,
+        //validators: filledValidators.value,
         // Validated decimal strings (native coin); the goal is their sum.
         milestoneAmounts: milestoneAmountChecks.value.map((c) => (c.ok ? c.value : '0')),
       },
@@ -261,7 +261,7 @@ async function submit() {
         </label>
       </section>
 
-      <!-- Contract: Validatoren -->
+      <!-- Contract: Validatoren
       <section class="card card--chain">
         <div class="card__head">
           <h2 class="card__title"><AppIcon name="lock" :size="14" /> Validatoren (Smart Contract)</h2>
@@ -275,7 +275,7 @@ async function submit() {
           <input v-model="form.validators[i]" class="field__input field__input--mono" type="text" placeholder="0x…" />
           <button type="button" class="btn btn--icon" aria-label="Validator entfernen" @click="removeValidator(i)">✕</button>
         </div>
-      </section>
+      </section> -->
 
       <!-- Contract + Backend: Meilensteine -->
       <section class="card">

@@ -25,9 +25,17 @@ const props = defineProps<{
   /** Error from the last vote attempt on this milestone (e.g. the local-signer
    *  guard, or a revert once wired) — shown inline. */
   voteError?: string | null
+  /** The connected account is the owner and may pay out THIS milestone now (it
+   *  is the current one and the previous milestone is approved). UI gate only —
+   *  the contract re-checks isOwner / phase / lastMilestoneApproved. */
+  canPayout?: boolean
+  /** A payout tx for this milestone is in flight. */
+  payingOut?: boolean
+  /** Error from the last payout attempt on this milestone — shown inline. */
+  payoutError?: string | null
 }>()
 
-const emit = defineEmits<{ vote: [approve: boolean] }>()
+const emit = defineEmits<{ vote: [approve: boolean]; payout: [] }>()
 
 const statusMeta: Record<MilestoneStatus, { label: string; variant: string }> = {
   completed: { label: 'Abgeschlossen', variant: 'green' },
@@ -78,8 +86,8 @@ const avatars = computed(() =>
           <AppIcon name="check" :size="14" />
           <span>Freigegeben</span>
         </div>
-        <!-- Validators are voting on this milestone right now; their approval
-             releases this milestone's own funds. -->
+        <!-- Validators are voting on this (already-paid) milestone right now;
+             their approval unlocks the payout of the NEXT milestone. -->
         <div v-else-if="milestone.status === 'in_progress'" class="ms__confirm">
           <div class="ms__avatars">
             <span v-for="(a, i) in avatars" :key="i" class="ms__avatar" :title="a.address">
@@ -105,16 +113,31 @@ const avatars = computed(() =>
       </div>
     </div>
 
+    <!-- Owner: release this milestone's funds. Paying it also opens the
+         validator vote on it, which (once approved) unlocks the next payout.
+         Sends the real payout() tx — see services/projectsService.payoutMilestone. -->
+    <div v-if="canPayout" class="ms__payout">
+      <span class="ms__payout-label">Bereit zur Auszahlung</span>
+      <button
+        type="button"
+        class="ms__payout-btn"
+        :disabled="payingOut"
+        @click="emit('payout')"
+      >
+        {{ payingOut ? 'Zahle aus …' : 'Meilenstein auszahlen' }}
+      </button>
+      <span v-if="payoutError" class="ms__payout-error" role="alert">{{ payoutError }}</span>
+    </div>
+
     <!-- Validator voting on the current milestone. The buttons mirror the
-         contract's voteMilestone gate; the action itself is a placeholder (no
-         tx is sent yet — see services/projectsService.voteOnMilestone). -->
+         contract's voteMilestone gate and send the real vote tx (see
+         services/projectsService.voteOnMilestone). -->
     <div v-if="canVote || myVote" class="ms__vote">
       <template v-if="myVote">
         <span class="ms__voted" :class="`ms__voted--${myVote === 'approve' ? 'yes' : 'no'}`">
           <AppIcon v-if="myVote === 'approve'" name="check" :size="13" />
           {{ myVote === 'approve' ? 'Du hast zugestimmt' : 'Du hast abgelehnt' }}
         </span>
-        <span class="ms__vote-note">Platzhalter – noch nicht an den Vertrag gesendet.</span>
       </template>
       <template v-else>
         <span class="ms__vote-label">Als Validator abstimmen</span>
@@ -400,6 +423,47 @@ const avatars = computed(() =>
 }
 
 .ms__vote-error {
+  flex-basis: 100%;
+  font-size: 13px;
+  color: #dc2626;
+}
+
+/* Owner payout */
+.ms__payout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--bd-divider);
+}
+
+.ms__payout-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--bd-black);
+}
+
+.ms__payout-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--bd-radius-sm);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid transparent;
+  color: var(--bd-surface);
+  background: var(--bd-black);
+}
+
+.ms__payout-btn:disabled {
+  opacity: 0.6;
+}
+
+.ms__payout-error {
   flex-basis: 100%;
   font-size: 13px;
   color: #dc2626;

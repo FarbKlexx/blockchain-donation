@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { Funding, Project } from '@/types/project'
-import { getProject, voteOnMilestone } from '@/services/projectsService'
+import { getProject, voteOnMilestone, payoutMilestone } from '@/services/projectsService'
 import { useWalletStore } from '@/stores/wallet'
 import { formatDate } from '@/utils/format'
 import ProjectHero from '@/components/project/ProjectHero.vue'
@@ -38,9 +38,9 @@ const isValidator = computed(
   () => !!project.value && wallet.roleInProject(project.value.contract.address).isValidator,
 )
 
-// This account's votes cast THIS session, keyed by milestone position. Local UI
-// reflection only — the contract write is a placeholder (voteOnMilestone), so
-// nothing is persisted. Once wired, this comes from chain (hasVoted/votes).
+// This account's votes cast THIS session, keyed by milestone position — a local
+// hint so the button flips to "you voted" immediately. The authoritative
+// confirmations come from the chain re-read on `load()` after the tx.
 const myVotes = ref<Record<number, 'approve' | 'reject'>>({})
 const voteErrors = ref<Record<number, string>>({})
 const votingIndex = ref<number | null>(null)
@@ -52,13 +52,47 @@ async function onVote(index: number, approve: boolean) {
   try {
     await voteOnMilestone(project.value.contract.address, index, approve)
     myVotes.value[index] = approve ? 'approve' : 'reject'
+    // Re-read: an approval can unlock the next payout or close the project.
+    await load()
   } catch (e) {
-    // Surface failures (today: the local-signer guard; once wired: a revert)
-    // instead of swallowing them — mirrors the donate flow in ProjectHero.
+    // Surface failures (the local-signer guard, or a contract revert) instead
+    // of swallowing them — mirrors the donate flow in ProjectHero.
     voteErrors.value[index] =
       e instanceof Error ? e.message : 'Abstimmung fehlgeschlagen. Bitte erneut versuchen.'
   } finally {
     votingIndex.value = null
+  }
+}
+
+// Owner: pay out the next milestone. The milestone the owner may pay is
+// `currentMilestoneIndex`, but only in the Payout phase and once the previous
+// milestone is approved (its card shows 'completed'). Milestone 0 is gated by
+// the project-setup vote — reflected by contractStatus already being 'Payout'.
+const payingOut = ref(false)
+const payoutError = ref<string | null>(null)
+
+const payableIndex = computed(() => {
+  const p = project.value
+  if (!p || p.contractStatus !== 'Payout') return -1
+  const k = p.currentMilestoneIndex
+  if (k >= p.milestones.length) return -1
+  if (k === 0) return 0
+  return p.milestones[k - 1]?.status === 'completed' ? k : -1
+})
+
+async function onPayout(index: number) {
+  if (!project.value || payingOut.value) return
+  payingOut.value = true
+  payoutError.value = null
+  try {
+    await payoutMilestone(project.value.contract.address, index)
+    // Paying a milestone opens its validator vote — re-read to show it.
+    await load()
+  } catch (e) {
+    payoutError.value =
+      e instanceof Error ? e.message : 'Auszahlung fehlgeschlagen. Bitte erneut versuchen.'
+  } finally {
+    payingOut.value = false
   }
 }
 
@@ -82,11 +116,11 @@ function updateIndicator() {
   if (el) indicator.value = { left: el.offsetLeft, width: el.offsetWidth }
 }
 
+// Re-fetch the project from chain + backend. Used both on first load and after
+// a vote/payout — a same-project reload keeps the active tab and this session's
+// cast-vote hints (only `enterProject` resets those, on a real navigation).
 async function load() {
   loading.value = true
-  activeTab.value = 'beschreibung'
-  myVotes.value = {}
-  voteErrors.value = {}
   try {
     project.value = await getProject(props.id)
   } finally {
@@ -94,6 +128,16 @@ async function load() {
   }
   await nextTick()
   updateIndicator()
+}
+
+// Switch to a (possibly different) project: clear per-project local UI state,
+// then load.
+function enterProject() {
+  activeTab.value = 'beschreibung'
+  myVotes.value = {}
+  voteErrors.value = {}
+  payoutError.value = null
+  load()
 }
 
 // Apply the authoritative funding the service returns AFTER the tx confirmed
@@ -107,10 +151,10 @@ function onDonated(funding: Funding) {
 // Re-measure the underline when the tab changes, the window resizes, or the
 // web font finishes loading (which changes text widths).
 watch(activeTab, () => nextTick(updateIndicator))
-watch(() => props.id, load)
+watch(() => props.id, enterProject)
 
 onMounted(() => {
-  load()
+  enterProject()
   window.addEventListener('resize', updateIndicator)
   document.fonts?.ready.then(updateIndicator)
 })
@@ -178,7 +222,7 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
               <AppIcon :name="goalReached ? 'circle-help' : 'lock'" :size="14" />
               {{
                 goalReached
-                  ? 'Nach Zielerreichung stimmen die Validatoren über jeden Meilenstein ab – auch über den ersten. Erst nach Freigabe durch die Mehrheit werden die zugeordneten Mittel ausgezahlt.'
+                  ? 'Nach Zielerreichung bestätigen die Validatoren zunächst den Projektstart. Danach zahlt der Eigentümer die Meilensteine nacheinander aus – über jeden ausgezahlten Meilenstein stimmen die Validatoren ab, und erst ihre Freigabe schaltet die Auszahlung des nächsten Meilensteins frei.'
                   : 'Die Abstimmung über die Meilensteine beginnt erst, sobald das Finanzierungsziel erreicht ist.'
               }}
             </p>
@@ -194,7 +238,11 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
                 :my-vote="myVotes[i] ?? null"
                 :voting="votingIndex === i"
                 :vote-error="voteErrors[i] ?? null"
+                :can-payout="isOwner && i === payableIndex"
+                :paying-out="payingOut && i === payableIndex"
+                :payout-error="i === payableIndex ? payoutError : null"
                 @vote="onVote(i, $event)"
+                @payout="onPayout(i)"
               />
             </div>
           </div>

@@ -42,7 +42,7 @@ function scaledWei(mockAmount: number): bigint {
 function updateFrontendEnv(factoryAddress: string) {
   const envPath = path.join(frontendRoot, ".env");
   const examplePath = path.join(frontendRoot, ".env.example");
-  if (!existsSync(envPath)) copyFileSync(examplePath, envPath);
+  if (!existsSync(envPath)) copyFileSync(envPath, examplePath);
 
   let contents = readFileSync(envPath, "utf8");
   const line = `VITE_CONTRACT_ADDRESS=${factoryAddress}`;
@@ -87,8 +87,19 @@ async function resetBackendDb() {
 const signers = await ethers.getSigners();
 const deployer = signers[0];
 const owners = signers.slice(1, 6);
-const validators = signers.slice(6, 9);
-const donorPool = signers.slice(9, 20);
+// Validators are NO LONGER chosen here — reaching the funding goal makes the
+// contract pick them at random from donors who gave >= validatorMinimumDonation
+// (0.01 ETH). We read the selected set from the chain per campaign (below).
+const donorPool = signers.slice(6, 20);
+
+// Donation.Status enum order (Funding, ToBeApproved, Payout, Failed, Closed).
+const StatusEnum = { Funding: 0, ToBeApproved: 1, Payout: 2, Failed: 3, Closed: 4 } as const;
+const signerByAddress = new Map(signers.map((s) => [s.address.toLowerCase(), s]));
+
+// Demo seam: the project id whose final PAID milestone is left with an OPEN vote
+// after seeding (see the replay loop below), so validator voting + the follow-up
+// owner payout are both exercisable in the UI immediately. "" disables it.
+const LEAVE_VOTE_OPEN_FOR = "mobile-suppenkueche-berlin";
 
 console.log("Deploying DonationFactory from", deployer.address);
 const factory = await ethers.deployContract("DonationFactory", deployer);
@@ -112,7 +123,7 @@ for (let i = 0; i < contractData.campaigns.length; i++) {
   const meta = metadata.projects[i];
 
   const owner = owners[i];
-  const validatorAddresses = validators.map((v) => v.address);
+  //const validatorAddresses = validators.map((v) => v.address);
   const milestoneAmounts = campaign.milestones.map((m: any) => scaledWei(m.amount));
   const milestoneDescriptions = campaign.milestones.map(
     (_m: any, idx: number) => meta.milestones[idx]?.title ?? `Meilenstein ${idx + 1}`,
@@ -123,7 +134,7 @@ for (let i = 0; i < contractData.campaigns.length; i++) {
   console.log(`\n[${meta.id}] deploying as owner ${owner.address} ...`);
   const tx = await factory
     .connect(owner)
-    .createDonation(validatorAddresses, description, duration, milestoneAmounts, milestoneDescriptions);
+    .createDonation(description, duration, milestoneAmounts, milestoneDescriptions);
   const receipt = await tx.wait();
   if (!receipt) throw new Error(`createDonation for ${meta.id} did not produce a receipt`);
 
@@ -158,35 +169,62 @@ for (let i = 0; i < contractData.campaigns.length; i++) {
   }
   console.log(`[${meta.id}] donated ${ethers.formatEther(targetTotal)} ETH from ${donorsUsed} donor(s)`);
 
-  // --- replay milestone payouts/votes, driven directly by contractData.json's target state ---
-  // Each milestone's approvedCount/rejectedCount describe votes cast ON that
-  // milestone (after it's paid) to gate the payout of the NEXT one — see
-  // contractData.json's own `_comment`. Stop at the first unpaid milestone.
+  // Funding only completes once totalDonations reaches the goal. If the mock
+  // campaign is still under its goal the contract stays in Funding: no
+  // validators were selected and there is nothing to approve or pay out.
+  if (Number(await donation.currentStatus()) === StatusEnum.Funding) {
+    console.log(`[${meta.id}] still Funding (goal not reached) — nothing to approve or pay out`);
+    results.push({ id: meta.id, address: donationAddress });
+    continue;
+  }
+
+  // We don't choose validators — reaching the goal made the contract pick them
+  // at random from qualifying donors. Read the selected set and map each address
+  // back to its signer so we can act as those validators.
+  const onchainValidators = (await donation.getValidators()).map((addr: string) => {
+    const s = signerByAddress.get(addr.toLowerCase());
+    if (!s) throw new Error(`[${meta.id}] selected validator ${addr} is not a known test signer`);
+    return s;
+  });
+  console.log(`[${meta.id}] contract selected ${onchainValidators.length} validator(s)`);
+
+  // Project-setup approval (ToBeApproved -> Payout): every funded campaign must
+  // clear this before ANY milestone can be paid. Approve from the selected
+  // validators until the contract finalizes the vote (66.66% majority).
+  for (const v of onchainValidators) {
+    if (Number(await donation.currentStatus()) !== StatusEnum.ToBeApproved) break;
+    await (await donation.connect(v).voteProjectSetup(true)).wait();
+  }
+  if (Number(await donation.currentStatus()) !== StatusEnum.Payout) {
+    throw new Error(`[${meta.id}] project setup was not approved — cannot replay payouts`);
+  }
+
+  // --- replay milestone payouts/votes ---
+  // In this contract a milestone is voted on AFTER it is paid, and that approval
+  // is what unlocks the NEXT payout (payout(m+1) requires milestone m approved).
+  // Every paid milestone in the seed is approved unanimously (rejected == 0), so
+  // pay each and approve until the contract finalizes its vote — this is robust
+  // to however many validators were selected. Stop at the first unpaid milestone.
   for (let m = 0; m < campaign.milestones.length; m++) {
-    const target = campaign.milestones[m];
-    if (!target.paid) break;
+    if (!campaign.milestones[m].paid) break;
 
     await (await donation.connect(owner).payout(m)).wait();
 
-    // The contract auto-finalizes voting the instant the 66.66% approve/
-    // reject threshold is crossed (e.g. 2 of 3 validators already clears
-    // it), so casting the mock's raw approvedCount/rejectedCount blindly
-    // can revert with "Milestone Voting has already finished". Cast up to
-    // that many votes, but stop as soon as the milestone actually finishes.
-    let approvesCast = 0;
-    let rejectsCast = 0;
-    for (let v = 0; v < validators.length; v++) {
-      if (approvesCast >= target.approvedCount && rejectsCast >= target.rejectedCount) break;
+    // DEMO SEAM: for ONE campaign, leave its FINAL paid milestone's vote OPEN so
+    // that a validator can vote right after seeding (and, once it's approved, the
+    // owner can pay the next milestone) — without this every seeded vote is
+    // already finalized and the UI has nothing open to act on. Earlier milestones
+    // must still finalize, else their payout wouldn't have been unlocked.
+    const isFinalPaid = !campaign.milestones[m + 1]?.paid;
+    if (meta.id === LEAVE_VOTE_OPEN_FOR && isFinalPaid) {
+      console.log(`[${meta.id}] left milestone ${m} vote OPEN (demo seam)`);
+      continue;
+    }
+
+    for (const v of onchainValidators) {
       const milestones = await donation.getMilestones();
       if (milestones[m].votingFinished) break;
-
-      if (approvesCast < target.approvedCount) {
-        await (await donation.connect(validators[v]).voteMilestone(m, true)).wait();
-        approvesCast++;
-      } else {
-        await (await donation.connect(validators[v]).voteMilestone(m, false)).wait();
-        rejectsCast++;
-      }
+      await (await donation.connect(v).voteMilestone(m, true)).wait();
     }
   }
   console.log(`[${meta.id}] replayed to status ${campaign.currentStatus}`);
