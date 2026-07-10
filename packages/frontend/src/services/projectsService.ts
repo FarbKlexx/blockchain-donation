@@ -139,7 +139,8 @@ async function fetchCampaignByAddress(address: string): Promise<ContractCampaign
       validators,
       rawMilestones,
       votingDeadline,
-      donors
+      donors,
+      rawProjectSetup
     ] = await Promise.all([
       contract.contractOwner(),
       contract.donationGoal(),
@@ -151,7 +152,8 @@ async function fetchCampaignByAddress(address: string): Promise<ContractCampaign
       contract.getValidators(),
       contract.getMilestones(),
       contract.votingDeadline(),
-      contract.getDonors()
+      contract.getDonors(),
+      contract.projectSetup()
     ])
 
     return {
@@ -168,6 +170,11 @@ async function fetchCampaignByAddress(address: string): Promise<ContractCampaign
       refundableBalance: Number(ethers.formatEther(await contract.refundableBalance())),
       validators: [...validators],
       donors: [...donors],
+      projectSetup: {
+        approvedCount: Number(rawProjectSetup.approvedCount),
+        rejectedCount: Number(rawProjectSetup.rejectedCount),
+        votingFinished: rawProjectSetup.votingFinished
+      },
       milestones: rawMilestones.map((ms) => ({
         amount: Number(ethers.formatEther(ms.amount)),
         approvedCount: Number(ms.approvedCount),
@@ -368,6 +375,13 @@ function mergeProject(c: ContractCampaign, m: ProjectMetadata): Project {
     // milestone the owner may pay / validators may vote on from these.
     contractStatus: c.currentStatus,
     currentMilestoneIndex: c.currentMilestoneIndex,
+    projectSetup: {
+      approvedCount: c.projectSetup.approvedCount,
+      rejectedCount: c.projectSetup.rejectedCount,
+      votingFinished: c.projectSetup.votingFinished,
+      requiredApprovals: required,
+      totalValidators: c.validators.length,
+    },
     funding: toFunding(c),
     contract: {
       // Explorer URL/label are derived from the on-chain address here, NOT
@@ -609,6 +623,51 @@ export async function voteOnMilestone(
       votingFinished: milestone.votingFinished,
       paid: milestone.paid
     }
+  }
+}
+
+export interface VoteSetupResult {
+  txHash: string
+  currentStatus: string
+  projectSetup: { approvedCount: number; rejectedCount: number; votingFinished: boolean }
+}
+
+/**
+ * Cast a validator's vote on the PROJECT SETUP (approve = true, reject = false) —
+ * the one-time vote, while the campaign is in ToBeApproved, that confirms the
+ * project may start. A 66.66% majority moves it to Payout (enabling the first
+ * milestone payout); a blocking majority fails the project. Validator-only and
+ * only while the setup vote is open — the contract enforces every precondition
+ * (isValidator, ToBeApproved phase, voting not finished, deadline not passed, no
+ * duplicate vote); the UI only mirrors them. State is re-read after the tx.
+ */
+export async function voteProjectSetup(
+  projectAddress: string,
+  approve: boolean,
+): Promise<VoteSetupResult> {
+  assertLocalSigner()
+  const { signer } = await getBlockchainContext()
+  const donationContract = Donation__factory.connect(projectAddress, signer)
+
+  const tx = await donationContract.voteProjectSetup(approve)
+  const receipt = await tx.wait()
+  if (!receipt || receipt.status === 0) {
+    throw new Error('Die Abstimmung auf der Blockchain ist fehlgeschlagen.')
+  }
+
+  const [rawStatus, rawSetup] = await Promise.all([
+    donationContract.currentStatus(),
+    donationContract.projectSetup(),
+  ])
+
+  return {
+    txHash: tx.hash,
+    currentStatus: STATUS_MAP[Number(rawStatus)] ?? 'Funding',
+    projectSetup: {
+      approvedCount: Number(rawSetup.approvedCount),
+      rejectedCount: Number(rawSetup.rejectedCount),
+      votingFinished: rawSetup.votingFinished,
+    },
   }
 }
 

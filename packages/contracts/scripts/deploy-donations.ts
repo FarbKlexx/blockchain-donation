@@ -101,6 +101,17 @@ const signerByAddress = new Map(signers.map((s) => [s.address.toLowerCase(), s])
 // owner payout are both exercisable in the UI immediately. "" disables it.
 const LEAVE_VOTE_OPEN_FOR = "mobile-suppenkueche-berlin";
 
+// Demo seam: the project id that FUNDS fully but is left in ToBeApproved (its
+// project-setup vote NOT cast), so a validator can approve the project start in
+// the UI. "" disables it.
+const LEAVE_SETUP_OPEN_FOR = "gemeinschaftsgarten-lindenau";
+
+// Demo seam: the project id that ran OUT OF TIME below its goal. Must have a
+// SHORT window (small end-start in the mock) and be listed LAST, so jumping past
+// its `end` to call markAsFailedFunding() doesn't expire the other campaigns
+// (whose windows are ~weeks long). "" disables it.
+const MARK_FAILED_FUNDING_FOR = "open-air-kino-hinterhof";
+
 console.log("Deploying DonationFactory from", deployer.address);
 const factory = await ethers.deployContract("DonationFactory", deployer);
 await factory.waitForDeployment();
@@ -122,8 +133,9 @@ for (let i = 0; i < contractData.campaigns.length; i++) {
   // campaigns/projects in the same fixed order.
   const meta = metadata.projects[i];
 
-  const owner = owners[i];
-  //const validatorAddresses = validators.map((v) => v.address);
+  // Reuse owners cyclically so more campaigns than owner accounts still deploy
+  // (e.g. the 6th campaign wraps back to the first owner).
+  const owner = owners[i % owners.length];
   const milestoneAmounts = campaign.milestones.map((m: any) => scaledWei(m.amount));
   const milestoneDescriptions = campaign.milestones.map(
     (_m: any, idx: number) => meta.milestones[idx]?.title ?? `Meilenstein ${idx + 1}`,
@@ -169,6 +181,23 @@ for (let i = 0; i < contractData.campaigns.length; i++) {
   }
   console.log(`[${meta.id}] donated ${ethers.formatEther(targetTotal)} ETH from ${donorsUsed} donor(s)`);
 
+  // DEMO SEAM: this campaign ran out of time below its goal. Jump past its (short)
+  // funding window, then markAsFailedFunding() -> Failed(NoFunding), which freezes
+  // refundableBalance for donor refunds. Its window is short and it's LAST, so the
+  // time jump doesn't expire the other (long-running) campaigns.
+  if (meta.id === MARK_FAILED_FUNDING_FOR) {
+    const end = Number(await donation.end());
+    const now = (await ethers.provider.getBlock("latest"))!.timestamp;
+    if (now <= end) {
+      await ethers.provider.send("evm_increaseTime", [end - now + 1]);
+      await ethers.provider.send("evm_mine", []);
+    }
+    await (await donation.connect(owner).markAsFailedFunding()).wait();
+    console.log(`[${meta.id}] funding window expired below goal -> marked Failed (NoFunding)`);
+    results.push({ id: meta.id, address: donationAddress });
+    continue;
+  }
+
   // Funding only completes once totalDonations reaches the goal. If the mock
   // campaign is still under its goal the contract stays in Funding: no
   // validators were selected and there is nothing to approve or pay out.
@@ -187,6 +216,33 @@ for (let i = 0; i < contractData.campaigns.length; i++) {
     return s;
   });
   console.log(`[${meta.id}] contract selected ${onchainValidators.length} validator(s)`);
+
+  // DEMO SEAM: leave this campaign in ToBeApproved with its project-setup vote
+  // OPEN, so a validator can approve the project start from the UI. We pre-cast a
+  // few approvals from validators OTHER than the demo persona so that logging in
+  // as that persona and approving is the DECIDING vote. We cap the pre-votes at
+  // (required - 1) so the vote can NEVER finalize here — with 4 validators the
+  // 66.66% threshold is 3, so this leaves exactly 2/4 approved and open.
+  if (meta.id === LEAVE_SETUP_OPEN_FOR) {
+    // "Beispiel-Validator" persona (Hardhat #14) — kept UNVOTED so its approval
+    // in the UI is the one that reaches the threshold. See frontend mockUsers.ts.
+    const DEMO_PERSONA = "0xdF3e18d64BC6A983f673Ab319CCaE4f1a57C7097".toLowerCase();
+    const required = Math.ceil((onchainValidators.length * 6666) / 10000);
+    const prevotes = Math.max(0, required - 1);
+    let cast = 0;
+    for (const v of onchainValidators) {
+      if (cast >= prevotes) break;
+      if (v.address.toLowerCase() === DEMO_PERSONA) continue; // keep the persona unvoted
+      await (await donation.connect(v).voteProjectSetup(true)).wait();
+      cast++;
+    }
+    console.log(
+      `[${meta.id}] left in ToBeApproved with ${cast}/${onchainValidators.length} setup approvals ` +
+        `(threshold ${required}) — the persona's vote decides`,
+    );
+    results.push({ id: meta.id, address: donationAddress });
+    continue;
+  }
 
   // Project-setup approval (ToBeApproved -> Payout): every funded campaign must
   // clear this before ANY milestone can be paid. Approve from the selected

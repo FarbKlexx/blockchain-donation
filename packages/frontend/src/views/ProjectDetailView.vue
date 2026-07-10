@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { Funding, Project } from '@/types/project'
-import { getProject, voteOnMilestone, payoutMilestone } from '@/services/projectsService'
+import { getProject, voteOnMilestone, payoutMilestone, voteProjectSetup } from '@/services/projectsService'
 import { useWalletStore } from '@/stores/wallet'
 import { formatDate } from '@/utils/format'
 import ProjectHero from '@/components/project/ProjectHero.vue'
@@ -96,6 +96,37 @@ async function onPayout(index: number) {
   }
 }
 
+// Validator: approve/reject the PROJECT SETUP while the campaign is in
+// ToBeApproved (the one-time vote that must pass before any milestone is paid).
+const mySetupVote = ref<'approve' | 'reject' | null>(null)
+const setupVoting = ref(false)
+const setupError = ref<string | null>(null)
+
+// Show the setup-vote panel only while the vote is actually open on-chain.
+const setupVoteOpen = computed(
+  () => !!project.value && project.value.contractStatus === 'ToBeApproved',
+)
+const canVoteSetup = computed(
+  () => setupVoteOpen.value && isValidator.value && !mySetupVote.value,
+)
+
+async function onVoteSetup(approve: boolean) {
+  if (!project.value || setupVoting.value) return
+  setupVoting.value = true
+  setupError.value = null
+  try {
+    await voteProjectSetup(project.value.contract.address, approve)
+    mySetupVote.value = approve ? 'approve' : 'reject'
+    // A decisive vote flips the project to Payout (or Failed) — re-read.
+    await load()
+  } catch (e) {
+    setupError.value =
+      e instanceof Error ? e.message : 'Abstimmung fehlgeschlagen. Bitte erneut versuchen.'
+  } finally {
+    setupVoting.value = false
+  }
+}
+
 // Lifecycle gate (Spende → Stimme → Auszahlung): validators may only vote on
 // milestones once the funding goal is reached. The milestone UI keys off this,
 // so it can never present confirmations before the goal is met.
@@ -137,6 +168,8 @@ function enterProject() {
   myVotes.value = {}
   voteErrors.value = {}
   payoutError.value = null
+  mySetupVote.value = null
+  setupError.value = null
   load()
 }
 
@@ -226,6 +259,42 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
                   : 'Die Abstimmung über die Meilensteine beginnt erst, sobald das Finanzierungsziel erreicht ist.'
               }}
             </p>
+
+            <!-- Project-setup approval: shown while the campaign is ToBeApproved.
+                 Validators confirm the project start before any milestone is paid. -->
+            <div v-if="setupVoteOpen" class="setup">
+              <div class="setup__head">
+                <AppIcon name="shield-check" :size="16" />
+                <h3 class="setup__title">Projektstart bestätigen</h3>
+              </div>
+              <p class="setup__text">
+                Das Finanzierungsziel ist erreicht. Bevor die erste Auszahlung freigegeben wird,
+                bestätigen die Validatoren den Projektstart. Mit
+                <strong>{{ project.projectSetup.requiredApprovals }}</strong> von
+                {{ project.projectSetup.totalValidators }} Zustimmungen startet die Auszahlungsphase.
+              </p>
+              <div class="setup__tally">
+                {{ project.projectSetup.approvedCount }}/{{ project.projectSetup.totalValidators }}
+                bestätigt · {{ project.projectSetup.requiredApprovals }} für Freigabe nötig
+              </div>
+
+              <div v-if="mySetupVote" class="setup__voted" :class="`setup__voted--${mySetupVote === 'approve' ? 'yes' : 'no'}`">
+                <AppIcon v-if="mySetupVote === 'approve'" name="check" :size="14" />
+                {{ mySetupVote === 'approve' ? 'Du hast den Projektstart bestätigt' : 'Du hast den Projektstart abgelehnt' }}
+              </div>
+              <div v-else-if="canVoteSetup" class="setup__actions">
+                <button type="button" class="setup__btn setup__btn--yes" :disabled="setupVoting" @click="onVoteSetup(true)">
+                  <AppIcon name="check" :size="14" />
+                  Projektstart bestätigen
+                </button>
+                <button type="button" class="setup__btn setup__btn--no" :disabled="setupVoting" @click="onVoteSetup(false)">
+                  Ablehnen
+                </button>
+              </div>
+              <p v-else class="setup__note">Nur Validatoren dieses Projekts können abstimmen.</p>
+              <p v-if="setupError" class="setup__error" role="alert">{{ setupError }}</p>
+            </div>
+
             <div class="milestones__list">
               <MilestoneCard
                 v-for="(m, i) in project.milestones"
@@ -441,6 +510,106 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+/* Project-setup approval */
+.setup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 24px;
+  background: var(--bd-amber-tint);
+  border: 1px solid var(--bd-amber);
+  border-radius: var(--bd-radius-md);
+}
+
+.setup__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--bd-black);
+}
+
+.setup__title {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.setup__text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--bd-grey-text);
+}
+
+.setup__tally {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--bd-black);
+}
+
+.setup__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.setup__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--bd-radius-sm);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.setup__btn:disabled {
+  opacity: 0.6;
+}
+
+.setup__btn--yes {
+  color: #fff;
+  background: var(--bd-green);
+}
+
+.setup__btn--no {
+  color: var(--bd-grey-text);
+  background: var(--bd-surface);
+  border-color: var(--bd-stroke);
+}
+
+.setup__btn--no:hover:not(:disabled) {
+  border-color: var(--bd-black);
+  color: var(--bd-black);
+}
+
+.setup__voted {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.setup__voted--yes {
+  color: var(--bd-green);
+}
+
+.setup__voted--no {
+  color: var(--bd-grey-text);
+}
+
+.setup__note {
+  font-size: 13px;
+  color: var(--bd-grey-text);
+}
+
+.setup__error {
+  font-size: 13px;
+  color: #dc2626;
 }
 
 /* Neuigkeiten */
