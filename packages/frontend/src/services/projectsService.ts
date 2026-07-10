@@ -20,7 +20,7 @@
 
 import { ethers } from 'ethers'
 import { DonationFactory__factory, Donation__factory } from '@/contracts/typechain'
-import type { Funding, MilestoneStatus, Project, ProjectFilter, ProjectSort, ProjectStatus } from '@/types/project'
+import type { Funding, MilestoneStatus, NewsEntry, Project, ProjectFilter, ProjectSort, ProjectStatus } from '@/types/project'
 import type { ContractCampaign, ProjectMetadata } from '@/types/sources'
 import { daysLeftUntil, hasEnded, percentFunded, timeLeftShort } from '@/utils/format'
 import { NATIVE_CURRENCY, decimalsFor, validateAmount } from '@/utils/amount'
@@ -201,6 +201,19 @@ async function fetchMetadataById(id: string): Promise<ProjectMetadata | null> {
   } catch {
     return null
   }
+}
+
+export interface ProjectNewsCreateResult extends NewsEntry {
+  id: number
+  project_id: string
+}
+
+export async function createProjectNews(projectId: string, news: NewsEntry): Promise<ProjectNewsCreateResult> {
+  return fetchJson<ProjectNewsCreateResult>(`/api/projects/${projectId}/news`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(news),
+  })
 }
 
 // ── Account roles (one-time scan at login) ───────────────────────────────────
@@ -852,9 +865,13 @@ export async function createProject(payload: CreateProjectPayload): Promise<Crea
       description: descriptionArray, // as array
       verified: false,
       milestones,
-      news: payload.metadata.news,
+      news: [],
     }),
   })
+
+  for (const newsEntry of payload.metadata.news) {
+    await createProjectNews(response.project_id, newsEntry)
+  }
 
   return { 
     address: deployedAddress, 
