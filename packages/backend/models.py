@@ -131,6 +131,28 @@ def create_project(
     return pid
 
 
+def create_news(
+    project_id: str,
+    date: Optional[str] = None,
+    title: Optional[str] = None,
+    body: Optional[str] = None,
+    images: Optional[List[str]] = None,
+) -> Optional[Dict[str, Any]]:
+    if not project_id:
+        return None
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
+        if cursor.fetchone() is None:
+            return None
+        cursor.execute(
+            "INSERT INTO news (project_id, date, title, body, images) VALUES (?, ?, ?, ?, ?)",
+            (project_id, date, title, body, json.dumps(images or [])),
+        )
+        connection.commit()
+        return get_news_item(cursor.lastrowid)
+
+
 def update_project(
     project_id: str,
     title: Optional[str] = None,
