@@ -2,6 +2,8 @@
 import { computed, reactive, ref } from 'vue'
 import { createProject, type CreateProjectPayload } from '@/services/projectsService'
 import { useWalletStore } from '@/stores/wallet'
+import { useNotificationStore } from '@/stores/notifications'
+import { toUserMessage } from '@/utils/errors'
 import { NATIVE_CURRENCY, NATIVE_DECIMALS, validateAmount } from '@/utils/amount'
 import { formatAmount } from '@/utils/format'
 import { shortenAddress } from '@/utils/address'
@@ -13,6 +15,7 @@ import AppIcon from '@/components/ui/AppIcon.vue'
 // is off-chain metadata. The connected account becomes the on-chain owner.
 // Submit deploys a mock contract address and persists metadata via the backend.
 const wallet = useWalletStore()
+const notifications = useNotificationStore()
 
 // const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/
 // const ZERO_ADDRESS = '0x' + '0'.repeat(40)
@@ -178,6 +181,9 @@ async function submit() {
     }
     const result = await createProject(payload)
     created.value = { address: result.address }
+    notifications.success('Dein Projekt wurde erstellt und veröffentlicht.')
+  } catch (e) {
+    notifications.error(toUserMessage(e), 'Projekt konnte nicht erstellt werden')
   } finally {
     submitting.value = false
   }

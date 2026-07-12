@@ -3,6 +3,8 @@ import { onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { Coupon } from '@/types/coupon'
 import { listCoupons } from '@/services/couponsService'
+import { useNotificationStore } from '@/stores/notifications'
+import { toUserMessage } from '@/utils/errors'
 import CouponHero from '@/components/coupon/CouponHero.vue'
 import CouponSteps from '@/components/coupon/CouponSteps.vue'
 import CouponTable from '@/components/coupon/CouponTable.vue'
@@ -12,6 +14,7 @@ import CouponTable from '@/components/coupon/CouponTable.vue'
 // public). Reads everything through couponsService (the integration seam).
 const coupons = ref<Coupon[]>([])
 const loading = ref(true)
+const notifications = useNotificationStore()
 
 // INTEGRATION POINT: coupon list. Service reads the mock contract source today;
 // later it reads the Coupon contract from chain. No backend/secret needed — the
@@ -20,6 +23,8 @@ async function load() {
   loading.value = true
   try {
     coupons.value = await listCoupons()
+  } catch (e) {
+    notifications.error(toUserMessage(e), 'Gutscheine konnten nicht geladen werden')
   } finally {
     loading.value = false
   }

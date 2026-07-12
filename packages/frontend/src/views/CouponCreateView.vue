@@ -2,6 +2,8 @@
 import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useWalletStore } from '@/stores/wallet'
+import { useNotificationStore } from '@/stores/notifications'
+import { toUserMessage } from '@/utils/errors'
 import { createCoupons, type CreateCouponsResult } from '@/services/couponsService'
 import { COUPON_NOMINAL_EUR, couponCreationCost, eurToEth, formatEth, formatEur } from '@/utils/coupon'
 import { shortenAddress } from '@/utils/address'
@@ -15,6 +17,7 @@ import AppIcon from '@/components/ui/AppIcon.vue'
 // Everything runs through couponsService (the integration seam); no distribution
 // happens on the site.
 const wallet = useWalletStore()
+const notifications = useNotificationStore()
 const dialogOpen = ref(false)
 
 // Form state (kept as strings; parsed on submit and for the live quote).
@@ -22,7 +25,6 @@ const count = ref('5')
 const valueEur = ref(String(COUPON_NOMINAL_EUR))
 
 const submitting = ref(false)
-const error = ref<string | null>(null)
 const result = ref<CreateCouponsResult | null>(null)
 
 // Live cost quote — mirrors what the service will charge (escrow + fee).
@@ -36,15 +38,15 @@ const quote = computed(() => {
 async function submit() {
   if (submitting.value || !wallet.address) return
   submitting.value = true
-  error.value = null
   result.value = null
   try {
     result.value = await createCoupons(wallet.address, {
       count: Number(count.value),
       valueEur: Number(valueEur.value),
     })
+    notifications.success('Deine Gutscheine wurden erstellt.')
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Erstellen fehlgeschlagen.'
+    notifications.error(toUserMessage(e), 'Erstellen fehlgeschlagen')
   } finally {
     submitting.value = false
   }
@@ -52,7 +54,6 @@ async function submit() {
 
 function reset() {
   result.value = null
-  error.value = null
 }
 </script>
 
@@ -149,8 +150,6 @@ function reset() {
               placeholder="z. B. 5"
             />
           </label>
-
-          <p v-if="error" class="create__error" role="alert">{{ error }}</p>
 
           <button type="submit" class="create__submit" :disabled="submitting || !quote">
             {{ submitting ? 'Erstelle Gutscheine …' : 'Gutscheine erstellen' }}
@@ -298,12 +297,6 @@ function reset() {
 .field__input:focus {
   outline: none;
   border-color: var(--bd-black);
-}
-
-.create__error {
-  font-size: 14px;
-  font-weight: 600;
-  color: #dc2626;
 }
 
 .create__submit {

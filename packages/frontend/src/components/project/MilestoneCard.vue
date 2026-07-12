@@ -24,17 +24,12 @@ const props = defineProps<{
   myVote?: 'approve' | 'reject' | null
   /** A vote tx for this milestone is in flight. */
   voting?: boolean
-  /** Error from the last vote attempt on this milestone (e.g. the local-signer
-   *  guard, or a revert once wired) — shown inline. */
-  voteError?: string | null
   /** The connected account is the owner and may pay out THIS milestone now (it
    *  is the current one and the previous milestone is approved). UI gate only —
    *  the contract re-checks isOwner / phase / lastMilestoneApproved. */
   canPayout?: boolean
   /** A payout tx for this milestone is in flight. */
   payingOut?: boolean
-  /** Error from the last payout attempt on this milestone — shown inline. */
-  payoutError?: string | null
 }>()
 
 const emit = defineEmits<{ vote: [approve: boolean]; payout: [] }>()
@@ -128,7 +123,6 @@ const avatars = computed(() =>
       >
         {{ payingOut ? 'Zahle aus …' : 'Meilenstein auszahlen' }}
       </button>
-      <span v-if="payoutError" class="ms__payout-error" role="alert">{{ payoutError }}</span>
     </div>
 
     <!-- Validator voting on the current milestone. The buttons mirror the
@@ -163,7 +157,6 @@ const avatars = computed(() =>
             {{ myVote === 'reject' ? 'Abgelehnt' : 'Ablehnen' }}
           </button>
         </div>
-        <span v-if="voteError" class="ms__vote-error" role="alert">{{ voteError }}</span>
       </template>
       <!-- Voted, but the poll here is no longer open → static confirmation. -->
       <template v-else>
@@ -442,12 +435,6 @@ const avatars = computed(() =>
   color: var(--bd-grey-text);
 }
 
-.ms__vote-error {
-  flex-basis: 100%;
-  font-size: 13px;
-  color: #dc2626;
-}
-
 /* Owner payout */
 .ms__payout {
   display: flex;
@@ -483,9 +470,4 @@ const avatars = computed(() =>
   opacity: 0.6;
 }
 
-.ms__payout-error {
-  flex-basis: 100%;
-  font-size: 13px;
-  color: #dc2626;
-}
 </style>

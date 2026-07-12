@@ -4,12 +4,15 @@ import { RouterLink } from 'vue-router'
 import type { Project, ProjectSort, ProjectStatus } from '@/types/project'
 import { listProjects } from '@/services/projectsService'
 import { useWalletStore } from '@/stores/wallet'
+import { useNotificationStore } from '@/stores/notifications'
+import { toUserMessage } from '@/utils/errors'
 import ProjectCard from '@/components/project/ProjectCard.vue'
 import ProjectCardSkeleton from '@/components/project/ProjectCardSkeleton.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 
 // Any connected account may create a project (no role required).
 const wallet = useWalletStore()
+const notifications = useNotificationStore()
 
 const filters: { value: ProjectStatus; label: string }[] = [
   { value: 'laufend', label: 'Laufend' },
@@ -44,6 +47,8 @@ async function load() {
       filter: activeFilter.value,
       sort: activeSort.value,
     })
+  } catch (e) {
+    notifications.error(toUserMessage(e), 'Projekte konnten nicht geladen werden')
   } finally {
     loading.value = false
   }

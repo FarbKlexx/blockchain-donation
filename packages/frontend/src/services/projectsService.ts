@@ -18,13 +18,14 @@
 // the UI-element → data-source mapping.
 // ─────────────────────────────────────────────────────────────────────────
 
-import { ethers } from 'ethers'
+import { ethers, type Eip1193Provider } from 'ethers'
 import { DonationFactory__factory, Donation__factory } from '@/contracts/typechain'
 import type { Funding, MilestoneStatus, NewsEntry, Project, ProjectFilter, ProjectSort, ProjectStatus } from '@/types/project'
 import type { ContractCampaign, ProjectMetadata } from '@/types/sources'
 import { daysLeftUntil, hasEnded, percentFunded, timeLeftShort } from '@/utils/format'
-import { NATIVE_CURRENCY, decimalsFor, validateAmount } from '@/utils/amount'
+import { NATIVE_CURRENCY } from '@/utils/amount'
 import { explorerAddressUrl, explorerLabel } from '@/utils/address'
+import { ApiError } from '@/utils/errors'
 
 const FACTORY_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS
 
@@ -36,13 +37,18 @@ function requireFactoryAddress(): string {
 // Mapping uint8 from the chain to String for the frontend
 const STATUS_MAP = ['Funding', 'ToBeApproved', 'Payout', 'Failed', 'Closed'] as const;
 
+// The injected wallet (MetaMask et al.) exposes an EIP-1193 provider on
+// `window.ethereum`. Typed locally so we never reach for `any`.
+type WindowWithEthereum = { ethereum?: Eip1193Provider }
+
 // Reads (listing campaigns, role scans) never need a wallet — only writes do.
 // Prefers the local RPC endpoint so the project grid works with no wallet
 // installed at all; falls back to the injected wallet's provider otherwise.
 function getReadProvider(): ethers.Provider {
   const rpcUrl = import.meta.env.VITE_RPC_URL
   if (rpcUrl) return new ethers.JsonRpcProvider(rpcUrl)
-  if ((window as any).ethereum) return new ethers.BrowserProvider((window as any).ethereum)
+  const injected = (window as WindowWithEthereum).ethereum
+  if (injected) return new ethers.BrowserProvider(injected)
   throw new Error('Keine RPC-Verbindung verfügbar (weder VITE_RPC_URL noch eine Krypto-Wallet).')
 }
 
@@ -84,16 +90,23 @@ async function getBlockchainContext() {
     return { provider, signer: new ethers.Wallet(devKey, provider) }
   }
 
-  if (!(window as any).ethereum) throw new Error('Keine Krypto-Wallet gefunden.')
-  const provider = new ethers.BrowserProvider((window as any).ethereum)
+  const injected = (window as WindowWithEthereum).ethereum
+  if (!injected) throw new Error('Keine Krypto-Wallet gefunden.')
+  const provider = new ethers.BrowserProvider(injected)
   const signer = await provider.getSigner()
   return { provider, signer }
 }
 
 async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, init)
+  let response: Response
+  try {
+    response = await fetch(input, init)
+  } catch {
+    // Network failure — the server could not be reached at all (no HTTP status).
+    throw new ApiError(0)
+  }
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status} ${response.statusText}`)
+    throw new ApiError(response.status, response.statusText)
   }
   return response.json() as Promise<T>
 }
@@ -443,7 +456,7 @@ function mergeProject(c: ContractCampaign, m: ProjectMetadata): Project {
     // or an array of objects with a `description` field. Ensure the UI always
     // receives `description: string[]`.
     description: Array.isArray(m.description)
-      ? m.description.map((d) => (typeof d === 'string' ? d : String((d as any).description ?? '')))
+      ? m.description.map((d) => (typeof d === 'string' ? d : String((d as { description?: unknown }).description ?? '')))
       : [String(m.description ?? '')],
     image: m.image,
     category: m.category,
@@ -679,7 +692,7 @@ export async function voteOnMilestone(
   approve: boolean
 ): Promise<VoteMilestoneResult> {
   assertLocalSigner()
-  const { signer, provider } = await getBlockchainContext()
+  const { signer } = await getBlockchainContext()
   const donationContract = Donation__factory.connect(projectAddress, signer)
 
   const tx = await donationContract.voteMilestone(milestoneIndex, approve)

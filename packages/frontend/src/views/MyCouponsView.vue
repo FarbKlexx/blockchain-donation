@@ -2,6 +2,8 @@
 import { onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useWalletStore } from '@/stores/wallet'
+import { useNotificationStore } from '@/stores/notifications'
+import { toUserMessage } from '@/utils/errors'
 import { listMyCoupons } from '@/services/couponsService'
 import type { MyCoupon } from '@/types/coupon'
 import CouponCodeReveal from '@/components/coupon/CouponCodeReveal.vue'
@@ -13,6 +15,7 @@ import AppIcon from '@/components/ui/AppIcon.vue'
 // The creator copies the keys here and distributes them off-site. Reads through
 // couponsService (the integration seam).
 const wallet = useWalletStore()
+const notifications = useNotificationStore()
 const dialogOpen = ref(false)
 
 const coupons = ref<MyCoupon[]>([])
@@ -26,6 +29,8 @@ async function load() {
   loading.value = true
   try {
     coupons.value = await listMyCoupons(wallet.address)
+  } catch (e) {
+    notifications.error(toUserMessage(e), 'Gutscheine konnten nicht geladen werden')
   } finally {
     loading.value = false
   }

@@ -2,6 +2,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { redeemCoupon, type RedeemResult } from '@/services/couponsService'
+import { useNotificationStore } from '@/stores/notifications'
+import { toUserMessage } from '@/utils/errors'
 import { ethToEur, formatEth, formatEur } from '@/utils/coupon'
 import AppIcon from '@/components/ui/AppIcon.vue'
 
@@ -13,6 +15,7 @@ import AppIcon from '@/components/ui/AppIcon.vue'
 // This demo page is NOT part of the donation flow — it represents an external
 // merchant checkout that calls the Coupon contract.
 const route = useRoute()
+const notifications = useNotificationStore()
 
 // A mock order to discount.
 const ORDER_ETH = 0.05
@@ -37,8 +40,9 @@ async function submit() {
   result.value = null
   try {
     result.value = await redeemCoupon(id, privateKey.value)
+    notifications.success('Der Gutschein wurde eingelöst.')
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Einlösen fehlgeschlagen.'
+    notifications.error(toUserMessage(e), 'Einlösen fehlgeschlagen')
   } finally {
     submitting.value = false
   }

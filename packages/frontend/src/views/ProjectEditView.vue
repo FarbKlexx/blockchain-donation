@@ -4,6 +4,8 @@ import { useRouter } from 'vue-router'
 import type { Project } from '@/types/project'
 import { getProject, updateProjectMetadata, type ProjectMetadataPatch } from '@/services/projectsService'
 import { useWalletStore } from '@/stores/wallet'
+import { useNotificationStore } from '@/stores/notifications'
+import { toUserMessage } from '@/utils/errors'
 import { formatAmount } from '@/utils/format'
 import { shortenAddress } from '@/utils/address'
 import AppIcon from '@/components/ui/AppIcon.vue'
@@ -16,6 +18,7 @@ import AppIcon from '@/components/ui/AppIcon.vue'
 const props = defineProps<{ id: string }>()
 const router = useRouter()
 const wallet = useWalletStore()
+const notifications = useNotificationStore()
 
 const project = ref<Project | null>(null)
 const loading = ref(true)
@@ -134,6 +137,8 @@ async function save() {
     await updateProjectMetadata(props.id, patch)
     saved.value = true
     await load()
+  } catch (e) {
+    notifications.error(toUserMessage(e), 'Speichern fehlgeschlagen')
   } finally {
     saving.value = false
   }

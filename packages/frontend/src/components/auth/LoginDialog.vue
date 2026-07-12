@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue'
 import { useWalletStore } from '@/stores/wallet'
+import { useNotificationStore } from '@/stores/notifications'
+import { toUserMessage } from '@/utils/errors'
 import { MOCK_USERS, type MockUser } from '@/services/mockUsers'
 import AppIcon from '@/components/ui/AppIcon.vue'
 
@@ -11,18 +13,28 @@ const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 
 const wallet = useWalletStore()
+const notifications = useNotificationStore()
 const isDev = import.meta.env.DEV
 
 async function pick(user: MockUser) {
   // Address + key together: the persona is both the shown identity AND the
   // signer, so its transactions actually come from this account.
-  await wallet.login(user.address, user.privateKey)
-  emit('close')
+  try {
+    await wallet.login(user.address, user.privateKey)
+    emit('close')
+  } catch (e) {
+    // Keep the dialog open so the user can retry; surface why it failed.
+    notifications.error(toUserMessage(e), 'Anmeldung fehlgeschlagen')
+  }
 }
 
 async function connectReal() {
-  await wallet.connect()
-  emit('close')
+  try {
+    await wallet.connect()
+    emit('close')
+  } catch (e) {
+    notifications.error(toUserMessage(e), 'Anmeldung fehlgeschlagen')
+  }
 }
 
 function onKey(e: KeyboardEvent) {

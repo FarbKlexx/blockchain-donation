@@ -4,6 +4,8 @@ import { RouterLink } from 'vue-router'
 import type { Funding, Project } from '@/types/project'
 import { getProject, voteOnMilestone, payoutMilestone, voteProjectSetup, createProjectNews, getMyProjectVotes } from '@/services/projectsService'
 import { useWalletStore } from '@/stores/wallet'
+import { useNotificationStore } from '@/stores/notifications'
+import { toUserMessage } from '@/utils/errors'
 import { formatDate } from '@/utils/format'
 import ProjectHero from '@/components/project/ProjectHero.vue'
 import FundingCard from '@/components/project/FundingCard.vue'
@@ -38,27 +40,26 @@ const isValidator = computed(
   () => !!project.value && wallet.roleInProject(project.value.contract.address).isValidator,
 )
 
-// This account's votes cast THIS session, keyed by milestone position — a local
-// hint so the button flips to "you voted" immediately. The authoritative
-// confirmations come from the chain re-read on `load()` after the tx.
+const notifications = useNotificationStore()
+
+// This account's current votes, keyed by milestone position — hydrated from chain
+// in load() (so they survive reloads) and set optimistically after a vote. The
+// authoritative confirmations come from the chain re-read on load() after the tx.
 const myVotes = ref<Record<number, 'approve' | 'reject'>>({})
-const voteErrors = ref<Record<number, string>>({})
 const votingIndex = ref<number | null>(null)
 
 async function onVote(index: number, approve: boolean) {
   if (!project.value || votingIndex.value !== null) return
   votingIndex.value = index
-  delete voteErrors.value[index]
   try {
     await voteOnMilestone(project.value.contract.address, index, approve)
     myVotes.value[index] = approve ? 'approve' : 'reject'
     // Re-read: an approval can unlock the next payout or close the project.
     await load()
+    notifications.success('Deine Stimme wurde gezählt.')
   } catch (e) {
-    // Surface failures (the local-signer guard, or a contract revert) instead
-    // of swallowing them — mirrors the donate flow in ProjectHero.
-    voteErrors.value[index] =
-      e instanceof Error ? e.message : 'Abstimmung fehlgeschlagen. Bitte erneut versuchen.'
+    // Failures (local-signer guard, contract revert) → a readable toast.
+    notifications.error(toUserMessage(e), 'Abstimmung fehlgeschlagen')
   } finally {
     votingIndex.value = null
   }
@@ -69,7 +70,6 @@ async function onVote(index: number, approve: boolean) {
 // milestone is approved (its card shows 'completed'). Milestone 0 is gated by
 // the project-setup vote — reflected by contractStatus already being 'Payout'.
 const payingOut = ref(false)
-const payoutError = ref<string | null>(null)
 
 const payableIndex = computed(() => {
   const p = project.value
@@ -83,14 +83,13 @@ const payableIndex = computed(() => {
 async function onPayout(index: number) {
   if (!project.value || payingOut.value) return
   payingOut.value = true
-  payoutError.value = null
   try {
     await payoutMilestone(project.value.contract.address, index)
     // Paying a milestone opens its validator vote — re-read to show it.
     await load()
+    notifications.success('Der Meilenstein wurde ausgezahlt.')
   } catch (e) {
-    payoutError.value =
-      e instanceof Error ? e.message : 'Auszahlung fehlgeschlagen. Bitte erneut versuchen.'
+    notifications.error(toUserMessage(e), 'Auszahlung fehlgeschlagen')
   } finally {
     payingOut.value = false
   }
@@ -100,7 +99,6 @@ async function onPayout(index: number) {
 // ToBeApproved (the one-time vote that must pass before any milestone is paid).
 const mySetupVote = ref<'approve' | 'reject' | null>(null)
 const setupVoting = ref(false)
-const setupError = ref<string | null>(null)
 
 // Show the setup-vote panel only while the vote is actually open on-chain.
 const setupVoteOpen = computed(
@@ -113,15 +111,14 @@ const canVoteSetup = computed(() => setupVoteOpen.value && isValidator.value)
 async function onVoteSetup(approve: boolean) {
   if (!project.value || setupVoting.value) return
   setupVoting.value = true
-  setupError.value = null
   try {
     await voteProjectSetup(project.value.contract.address, approve)
     mySetupVote.value = approve ? 'approve' : 'reject'
     // A decisive vote flips the project to Payout (or Failed) — re-read.
     await load()
+    notifications.success('Deine Stimme zum Projektstart wurde gezählt.')
   } catch (e) {
-    setupError.value =
-      e instanceof Error ? e.message : 'Abstimmung fehlgeschlagen. Bitte erneut versuchen.'
+    notifications.error(toUserMessage(e), 'Abstimmung fehlgeschlagen')
   } finally {
     setupVoting.value = false
   }
@@ -159,9 +156,16 @@ async function load() {
     // any change — the contract, not session memory, is the source of truth for
     // "you already voted X". Only validators of this project have votes to read.
     if (p && wallet.address && wallet.roleInProject(p.contract.address).isValidator) {
-      const mine = await getMyProjectVotes(p.contract.address, wallet.address)
-      mySetupVote.value = mine.setup
-      myVotes.value = mine.milestones
+      try {
+        const mine = await getMyProjectVotes(p.contract.address, wallet.address)
+        mySetupVote.value = mine.setup
+        myVotes.value = mine.milestones
+      } catch (e) {
+        // Non-fatal: the page still renders without the pre-filled vote state.
+        console.error('Fehler beim Laden der eigenen Stimmen:', e)
+        mySetupVote.value = null
+        myVotes.value = {}
+      }
     } else {
       mySetupVote.value = null
       myVotes.value = {}
@@ -178,13 +182,9 @@ async function load() {
 function enterProject() {
   activeTab.value = 'beschreibung'
   myVotes.value = {}
-  voteErrors.value = {}
-  payoutError.value = null
   mySetupVote.value = null
-  setupError.value = null
   newsOpen.value = false
   resetNewsForm()
-  publishError.value = null
   load()
 }
 
@@ -203,7 +203,6 @@ function onDonated(funding: Funding) {
 // alongside the existing ones.
 const newsOpen = ref(false)
 const publishing = ref(false)
-const publishError = ref<string | null>(null)
 const newsForm = reactive<{ date: string; title: string; body: string; images: string[] }>({
   date: '',
   title: '',
@@ -226,7 +225,6 @@ function resetNewsForm() {
 }
 
 function openNewsComposer() {
-  publishError.value = null
   newsForm.date = todayIso()
   newsOpen.value = true
 }
@@ -264,7 +262,6 @@ const canPublish = computed(() => newsForm.title.trim().length > 0)
 async function publishNews() {
   if (!project.value || publishing.value || !canPublish.value) return
   publishing.value = true
-  publishError.value = null
   try {
     await createProjectNews(project.value.id, {
       date: newsForm.date || todayIso(),
@@ -275,9 +272,9 @@ async function publishNews() {
     closeNewsComposer()
     // Re-read (keeps the active tab) so the appended entry appears with the rest.
     await load()
+    notifications.success('Deine Neuigkeit wurde veröffentlicht.')
   } catch (e) {
-    publishError.value =
-      e instanceof Error ? e.message : 'Veröffentlichen fehlgeschlagen. Bitte erneut versuchen.'
+    notifications.error(toUserMessage(e), 'Veröffentlichen fehlgeschlagen')
   } finally {
     publishing.value = false
   }
@@ -419,7 +416,6 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
                 </p>
               </div>
               <p v-else class="setup__note">Nur Validatoren dieses Projekts können abstimmen.</p>
-              <p v-if="setupError" class="setup__error" role="alert">{{ setupError }}</p>
             </div>
 
             <div class="milestones__list">
@@ -433,10 +429,8 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
                 :can-vote="isValidator && m.status === 'in_progress'"
                 :my-vote="myVotes[i] ?? null"
                 :voting="votingIndex === i"
-                :vote-error="voteErrors[i] ?? null"
                 :can-payout="isOwner && i === payableIndex"
                 :paying-out="payingOut && i === payableIndex"
-                :payout-error="i === payableIndex ? payoutError : null"
                 @vote="onVote(i, $event)"
                 @payout="onPayout(i)"
               />
@@ -506,7 +500,6 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
                     Nur eigener Upload · im Prototyp Platzhalter (Datei wird nicht gespeichert).
                   </span>
                 </div>
-                <p v-if="publishError" class="news-publish__error" role="alert">{{ publishError }}</p>
                 <div class="news-publish__actions">
                   <button
                     type="button"
@@ -832,11 +825,6 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
   color: var(--bd-grey-text);
 }
 
-.setup__error {
-  font-size: 13px;
-  color: #dc2626;
-}
-
 /* Neuigkeiten */
 .news {
   display: flex;
@@ -1006,11 +994,6 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
 .npf__hint {
   font-size: 12px;
   color: var(--bd-grey-text);
-}
-
-.news-publish__error {
-  font-size: 13px;
-  color: #dc2626;
 }
 
 .news-publish__actions {

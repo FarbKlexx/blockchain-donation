@@ -5,14 +5,19 @@ import { donate } from '@/services/projectsService'
 import { decimalsFor, validateAmount } from '@/utils/amount'
 import { mediaUrl } from '@/utils/media'
 import { useWalletStore } from '@/stores/wallet'
+import { useNotificationStore } from '@/stores/notifications'
+import { toUserMessage } from '@/utils/errors'
 import AppIcon from '@/components/ui/AppIcon.vue'
 
 const props = defineProps<{ project: Project }>()
 const emit = defineEmits<{ donated: [funding: Funding] }>()
 
 const wallet = useWalletStore()
+const notifications = useNotificationStore()
 const amount = ref('')
 const submitting = ref(false)
+// Inline error is for form-level validation only (empty/invalid amount, not
+// logged in). Transaction failures surface as toasts.
 const error = ref<string | null>(null)
 
 const decimals = computed(() => decimalsFor(props.project.currency))
@@ -42,9 +47,12 @@ async function onDonate() {
     // Use the authoritative post-confirmation funding from the service,
     // not a client-computed value.
     emit('donated', result.funding)
+    notifications.success(
+      `Vielen Dank! Deine Spende von ${check.value} ${props.project.currency} wurde übernommen.`,
+    )
     amount.value = ''
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Spende fehlgeschlagen. Bitte erneut versuchen.'
+    notifications.error(toUserMessage(e), 'Spende fehlgeschlagen')
   } finally {
     submitting.value = false
   }

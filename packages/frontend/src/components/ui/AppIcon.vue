@@ -15,6 +15,9 @@ type IconName =
   | 'pencil'
   | 'chevron-left'
   | 'chevron-right'
+  | 'circle-alert'
+  | 'circle-check'
+  | 'info'
 
 const props = withDefaults(defineProps<{ name: IconName; size?: number }>(), {
   size: 16,
@@ -36,6 +39,9 @@ const paths: Record<IconName, string> = {
   pencil: 'M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z',
   'chevron-left': 'm15 18-6-6 6-6',
   'chevron-right': 'm9 18 6-6-6-6',
+  'circle-alert': 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 8v4M12 16h.01',
+  'circle-check': 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM9 12l2 2 4-4',
+  info: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 16v-4M12 8h.01',
 }
 </script>
 
