@@ -307,6 +307,63 @@ export async function loadAccountSession(address: string): Promise<AccountSessio
   }
 }
 
+// ── This account's votes on ONE project (derived from chain) ─────────────────
+// The contract records each validator's vote per poll (hasVotedForProjectSetup /
+// hasVotedForMilestone, plus the votesFor… value). Reading it here means the
+// UI's "you voted X" state is DERIVED FROM CHAIN — it survives a page reload and
+// reflects a changed vote, instead of living only in session memory (which would
+// vanish on reload, re-enable the button, and revert on-chain as a duplicate).
+
+export type VoteChoice = 'approve' | 'reject'
+
+export interface MyProjectVotes {
+  /** The account's project-setup vote, or null if it hasn't voted. */
+  setup: VoteChoice | null
+  /** The account's vote per milestone index (only indices it has voted on). */
+  milestones: Record<number, VoteChoice>
+}
+
+/**
+ * Read the connected account's votes for a project straight from the contract,
+ * so the detail view can show them consistently across reloads and know which
+ * choice is already cast. The contract lets a validator CHANGE their vote while a
+ * poll is open, but reverts a vote identical to the current one ("Same Vote was
+ * already made") — so the UI needs the current choice to disable exactly that one.
+ */
+export async function getMyProjectVotes(
+  projectAddress: string,
+  account: string,
+): Promise<MyProjectVotes> {
+  const provider = getReadProvider()
+  const contract = Donation__factory.connect(projectAddress, provider)
+
+  const [hasSetupVote, milestoneCount] = await Promise.all([
+    contract.hasVotedForProjectSetup(account),
+    contract.getMilestoneCount(),
+  ])
+
+  let setup: VoteChoice | null = null
+  if (hasSetupVote) {
+    setup = (await contract.votesForProjectSetup(account)) ? 'approve' : 'reject'
+  }
+
+  const count = Number(milestoneCount)
+  const perMilestone = await Promise.all(
+    Array.from({ length: count }, async (_, i) => {
+      if (!(await contract.hasVotedForMilestone(i, account))) return null
+      const choice: VoteChoice = (await contract.votesForMilestone(i, account)) ? 'approve' : 'reject'
+      return { index: i, choice }
+    }),
+  )
+
+  const milestones: Record<number, VoteChoice> = {}
+  for (const entry of perMilestone) {
+    if (entry) milestones[entry.index] = entry.choice
+  }
+
+  return { setup, milestones }
+}
+
 // ── Derivations: raw on-chain fields → the UI model ──────────────────────────
 // The contract stores only primitives; everything the UI shows that looks
 // "computed" (days left, milestone/project status, the confirmation threshold)

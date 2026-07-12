@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { Funding, Project } from '@/types/project'
-import { getProject, voteOnMilestone, payoutMilestone, voteProjectSetup, createProjectNews } from '@/services/projectsService'
+import { getProject, voteOnMilestone, payoutMilestone, voteProjectSetup, createProjectNews, getMyProjectVotes } from '@/services/projectsService'
 import { useWalletStore } from '@/stores/wallet'
 import { formatDate } from '@/utils/format'
 import ProjectHero from '@/components/project/ProjectHero.vue'
@@ -106,9 +106,9 @@ const setupError = ref<string | null>(null)
 const setupVoteOpen = computed(
   () => !!project.value && project.value.contractStatus === 'ToBeApproved',
 )
-const canVoteSetup = computed(
-  () => setupVoteOpen.value && isValidator.value && !mySetupVote.value,
-)
+// A validator may vote AND change their vote while the setup poll is open — the
+// contract only rejects re-submitting the identical choice.
+const canVoteSetup = computed(() => setupVoteOpen.value && isValidator.value)
 
 async function onVoteSetup(approve: boolean) {
   if (!project.value || setupVoting.value) return
@@ -148,12 +148,24 @@ function updateIndicator() {
 }
 
 // Re-fetch the project from chain + backend. Used both on first load and after
-// a vote/payout — a same-project reload keeps the active tab and this session's
-// cast-vote hints (only `enterProject` resets those, on a real navigation).
+// a vote/payout — a same-project reload keeps the active tab (only `enterProject`
+// resets that, on a real navigation).
 async function load() {
   loading.value = true
   try {
-    project.value = await getProject(props.id)
+    const p = await getProject(props.id)
+    project.value = p
+    // Derive THIS account's votes from chain so they survive a reload and reflect
+    // any change — the contract, not session memory, is the source of truth for
+    // "you already voted X". Only validators of this project have votes to read.
+    if (p && wallet.address && wallet.roleInProject(p.contract.address).isValidator) {
+      const mine = await getMyProjectVotes(p.contract.address, wallet.address)
+      mySetupVote.value = mine.setup
+      myVotes.value = mine.milestones
+    } else {
+      mySetupVote.value = null
+      myVotes.value = {}
+    }
   } finally {
     loading.value = false
   }
@@ -368,18 +380,43 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
                 bestätigt · {{ project.projectSetup.requiredApprovals }} für Freigabe nötig
               </div>
 
-              <div v-if="mySetupVote" class="setup__voted" :class="`setup__voted--${mySetupVote === 'approve' ? 'yes' : 'no'}`">
-                <AppIcon v-if="mySetupVote === 'approve'" name="check" :size="14" />
-                {{ mySetupVote === 'approve' ? 'Du hast den Projektstart bestätigt' : 'Du hast den Projektstart abgelehnt' }}
-              </div>
-              <div v-else-if="canVoteSetup" class="setup__actions">
-                <button type="button" class="setup__btn setup__btn--yes" :disabled="setupVoting" @click="onVoteSetup(true)">
-                  <AppIcon name="check" :size="14" />
-                  Projektstart bestätigen
-                </button>
-                <button type="button" class="setup__btn setup__btn--no" :disabled="setupVoting" @click="onVoteSetup(false)">
-                  Ablehnen
-                </button>
+              <!-- Validators may vote AND change their vote while the poll is open.
+                   Both choices stay visible; only the current choice is disabled
+                   (re-submitting it reverts on-chain). State comes from chain, so
+                   it's correct after a reload. -->
+              <div v-if="canVoteSetup" class="setup__vote">
+                <span
+                  v-if="mySetupVote"
+                  class="setup__voted"
+                  :class="`setup__voted--${mySetupVote === 'approve' ? 'yes' : 'no'}`"
+                >
+                  <AppIcon v-if="mySetupVote === 'approve'" name="check" :size="14" />
+                  {{ mySetupVote === 'approve' ? 'Du hast den Projektstart bestätigt' : 'Du hast den Projektstart abgelehnt' }}
+                </span>
+                <div class="setup__actions">
+                  <button
+                    type="button"
+                    class="setup__btn setup__btn--yes"
+                    :class="{ 'setup__btn--current': mySetupVote === 'approve' }"
+                    :disabled="setupVoting || mySetupVote === 'approve'"
+                    @click="onVoteSetup(true)"
+                  >
+                    <AppIcon name="check" :size="14" />
+                    {{ mySetupVote === 'approve' ? 'Bestätigt' : 'Projektstart bestätigen' }}
+                  </button>
+                  <button
+                    type="button"
+                    class="setup__btn setup__btn--no"
+                    :class="{ 'setup__btn--current': mySetupVote === 'reject' }"
+                    :disabled="setupVoting || mySetupVote === 'reject'"
+                    @click="onVoteSetup(false)"
+                  >
+                    {{ mySetupVote === 'reject' ? 'Abgelehnt' : 'Ablehnen' }}
+                  </button>
+                </div>
+                <p v-if="mySetupVote" class="setup__note">
+                  Du kannst deine Stimme ändern, solange die Abstimmung läuft.
+                </p>
               </div>
               <p v-else class="setup__note">Nur Validatoren dieses Projekts können abstimmen.</p>
               <p v-if="setupError" class="setup__error" role="alert">{{ setupError }}</p>
@@ -393,7 +430,7 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
                 :validators="project.validators"
                 :currency="project.currency"
                 :voting-open="goalReached"
-                :can-vote="isValidator && m.status === 'in_progress' && !myVotes[i]"
+                :can-vote="isValidator && m.status === 'in_progress'"
                 :my-vote="myVotes[i] ?? null"
                 :voting="votingIndex === i"
                 :vote-error="voteErrors[i] ?? null"
@@ -740,6 +777,22 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
 
 .setup__btn:disabled {
   opacity: 0.6;
+}
+
+.setup__vote {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.setup__btn--current {
+  box-shadow: 0 0 0 2px var(--bd-black);
+}
+
+/* The current choice is disabled, but it's the active selection — don't dim it
+   like an ordinary disabled button. */
+.setup__btn--current:disabled {
+  opacity: 1;
 }
 
 .setup__btn--yes {

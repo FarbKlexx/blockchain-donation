@@ -2,7 +2,7 @@
   "_comment": "MOCK of SOURCE 2: the backend API (off-chain metadata). Human-readable content the frontend will later fetch over REST — texts, images, news, milestone titles/descriptions. Joined onto contractData.json by `address` (the on-chain contract address, stored here as the project's unique id); milestones join by array position. `id` is a human slug used only for routes. `verified` is a backend assertion (NOT on-chain). Validators are not here — they are anonymous on-chain addresses from the contract.",
   "projects": [
     {
-      "address": "0x75537828f2ce51be7289709686A69CbFDbB714F1",
+      "address": "0xa16E02E87b7454126E5E10d957A927A7F5B5d2be",
       "id": "burger-restaurant",
       "verified": true,
       "title": "Burger Restaurant",
@@ -58,7 +58,7 @@
       ]
     },
     {
-      "address": "0xE451980132E65465d0a498c53f0b5227326Dd73F",
+      "address": "0xB7A5bd0345EF1Cc5E66bf61BdeC17D2461fBd968",
       "id": "mesh-netzwerk-festivals",
       "verified": true,
       "title": "Mesh-Netzwerk für Festivals",
@@ -99,7 +99,7 @@
       ]
     },
     {
-      "address": "0x5392A33F7F677f59e833FEBF4016cDDD88fF9E67",
+      "address": "0xeEBe00Ac0756308ac4AaBfD76c05c4F3088B8883",
       "id": "roguelike-aetherbound",
       "verified": true,
       "title": "Roguelike „Aetherbound“",
@@ -139,7 +139,7 @@
       ]
     },
     {
-      "address": "0xa783CDc72e34a174CCa57a6d9a74904d0Bec05A9",
+      "address": "0x10C6E9530F1C1AF873a391030a1D9E8ed0630D26",
       "id": "mobile-suppenkueche-berlin",
       "verified": true,
       "title": "Mobile Suppenküche Berlin",
@@ -177,7 +177,7 @@
       ]
     },
     {
-      "address": "0xB30dAf0240261Be564Cea33260F01213c47AAa0D",
+      "address": "0x603E1BD79259EbcbAaeD0c83eeC09cA0B89a5bcC",
       "id": "wiederaufforstung-eifel",
       "verified": true,
       "title": "Wiederaufforstung Eifel",
@@ -218,7 +218,7 @@
       ]
     },
     {
-      "address": "0x61ef99673A65BeE0512b8d1eB1aA656866D24296",
+      "address": "0x86337dDaF2661A069D0DcB5D160585acC2d15E9a",
       "id": "gemeinschaftsgarten-lindenau",
       "verified": false,
       "title": "Gemeinschaftsgarten Lindenau",
@@ -250,7 +250,7 @@
       "news": []
     },
     {
-      "address": "0xF45bcaDCc83dea176213Ae4E22f5aF918d08647b",
+      "address": "0x9CfA6D15c80Eb753C815079F2b32ddEFd562C3e4",
       "id": "open-air-kino-hinterhof",
       "verified": false,
       "title": "Open-Air-Kino im Hinterhof",
