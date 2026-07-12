@@ -55,7 +55,7 @@ export function validateAmount(input: string, decimals: number): AmountValidatio
 
 /** Drop trailing fractional zeros (and a bare trailing dot) from a decimal
  *  string, so "18480.0" → "18480" and "0.070" → "0.07". Integers are untouched. */
-function trimTrailingZeros(value: string): string {
+export function trimTrailingZeros(value: string): string {
   if (!value.includes('.')) return value
   return value.replace(/0+$/, '').replace(/\.$/, '')
 }

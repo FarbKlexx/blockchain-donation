@@ -23,7 +23,7 @@ import { DonationFactory__factory, Donation__factory } from '@/contracts/typecha
 import type { Funding, MilestoneStatus, NewsEntry, Project, ProjectFilter, ProjectSort, ProjectStatus } from '@/types/project'
 import type { ContractCampaign, ProjectMetadata } from '@/types/sources'
 import { daysLeftUntil, hasEnded, percentFunded, timeLeftShort } from '@/utils/format'
-import { NATIVE_CURRENCY } from '@/utils/amount'
+import { NATIVE_CURRENCY, trimTrailingZeros } from '@/utils/amount'
 import { explorerAddressUrl, explorerLabel } from '@/utils/address'
 import { ApiError } from '@/utils/errors'
 
@@ -614,6 +614,64 @@ function assertLocalSigner(): void {
         'lokale Node verwendet werden (VITE_RPC_URL muss localhost sein). ' +
         'Dieses Frontend ist ausschließlich für die lokale Entwicklung gedacht.',
     )
+  }
+}
+
+/** A full, display-ready breakdown of what a donation will cost — the amount,
+ *  the estimated network (gas) fee, and their sum. All fields are formatted
+ *  strings in the native coin (except `gasPriceGwei`, in Gwei). Shown in the
+ *  checkout overlay BEFORE the user confirms. */
+export interface DonationGasEstimate {
+  /** The donation amount (native coin), e.g. "0.05". */
+  amount: string
+  /** Estimated gas units the tx will consume, grouped for display, e.g. "68.912". */
+  gasUnits: string
+  /** Gas price used for the estimate (Gwei), e.g. "1.5". */
+  gasPriceGwei: string
+  /** Estimated gas fee = gasUnits × gasPrice, in the native coin. */
+  gasFee: string
+  /** amount + gasFee — the maximum this interaction costs the user. */
+  total: string
+  currency: string
+}
+
+/**
+ * Estimate the full cost of a donation WITHOUT sending it — used by the checkout
+ * overlay. Runs the same `donate()` call through `estimateGas` (a real EVM
+ * simulation, so preconditions like the funding phase are checked and the gas
+ * figure is accurate) and multiplies by the current gas price. Uses the same
+ * signer/RPC as the real donation, so the estimate matches what will be sent.
+ * Throws (with a revert reason) if the donation itself would fail.
+ */
+export async function estimateDonationGas(
+  projectId: string,
+  amount: string,
+): Promise<DonationGasEstimate> {
+  assertLocalSigner()
+  const meta = await fetchMetadataById(projectId)
+  if (!meta) throw new Error('Projekt-Metadaten nicht gefunden.')
+
+  const { signer, provider } = await getBlockchainContext()
+  const donationContract = Donation__factory.connect(meta.address, signer)
+  const amountWei = ethers.parseEther(amount)
+
+  const [gasLimit, feeData] = await Promise.all([
+    donationContract.donate.estimateGas({ value: amountWei }),
+    provider.getFeeData(),
+  ])
+
+  // EIP-1559 upper bound if available, else the legacy gas price. This is the
+  // MAX fee; the actual cost is usually lower — the overlay says so.
+  const gasPriceWei = feeData.maxFeePerGas ?? feeData.gasPrice ?? 0n
+  const gasCostWei = gasLimit * gasPriceWei
+
+  return {
+    amount: trimTrailingZeros(ethers.formatEther(amountWei)),
+    gasUnits: gasLimit.toLocaleString('de-DE'),
+    gasPriceGwei: trimTrailingZeros(ethers.formatUnits(gasPriceWei, 'gwei')),
+    gasFee: trimTrailingZeros(ethers.formatEther(gasCostWei)),
+    total: trimTrailingZeros(ethers.formatEther(amountWei + gasCostWei)),
+    currency: NATIVE_CURRENCY,
   }
 }
 

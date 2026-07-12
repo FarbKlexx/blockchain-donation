@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import type { Funding, Project } from '@/types/project'
-import { donate } from '@/services/projectsService'
+import { donate, estimateDonationGas, type DonationGasEstimate } from '@/services/projectsService'
 import { decimalsFor, validateAmount, remainingAmountString } from '@/utils/amount'
 import { mediaUrl } from '@/utils/media'
 import { useWalletStore } from '@/stores/wallet'
 import { useNotificationStore } from '@/stores/notifications'
 import { toUserMessage } from '@/utils/errors'
 import AppIcon from '@/components/ui/AppIcon.vue'
+import DonationConfirmDialog from '@/components/project/DonationConfirmDialog.vue'
 
 const props = defineProps<{ project: Project }>()
 const emit = defineEmits<{ donated: [funding: Funding] }>()
@@ -19,6 +20,14 @@ const submitting = ref(false)
 // Inline error is for form-level validation only (empty/invalid amount, not
 // logged in). Transaction failures surface as toasts.
 const error = ref<string | null>(null)
+
+// Checkout overlay: opened by "Jetzt unterstützen", it shows a full cost
+// breakdown (amount + estimated gas) and only sends the tx once confirmed.
+const confirmOpen = ref(false)
+const estimating = ref(false)
+const estimate = ref<DonationGasEstimate | null>(null)
+const estimateError = ref<string | null>(null)
+const pendingAmount = ref('')
 
 const decimals = computed(() => decimalsFor(props.project.currency))
 
@@ -43,8 +52,8 @@ function fillRemaining() {
   error.value = null
 }
 
-// INTEGRATION POINT: "Jetzt unterstützen" — the donation transaction.
-// Calls the mock service today; wire to the escrow contract's donate().
+// "Jetzt unterstützen" — validate, then open the checkout overlay and estimate
+// the full cost. Nothing is signed/sent here; the tx only goes out on confirm.
 async function onDonate() {
   if (submitting.value) return
   error.value = null
@@ -62,21 +71,51 @@ async function onDonate() {
     return
   }
 
+  pendingAmount.value = check.value
+  estimate.value = null
+  estimateError.value = null
+  confirmOpen.value = true
+  estimating.value = true
+  try {
+    estimate.value = await estimateDonationGas(props.project.id, check.value)
+  } catch (e) {
+    estimateError.value = toUserMessage(e, 'Die Gaskosten konnten nicht geschätzt werden.')
+  } finally {
+    estimating.value = false
+  }
+}
+
+// Confirmed in the overlay → sign and send the donation.
+async function confirmDonate() {
+  if (submitting.value || !pendingAmount.value) return
   submitting.value = true
   try {
-    const result = await donate(props.project.id, check.value)
-    // Use the authoritative post-confirmation funding from the service,
-    // not a client-computed value.
+    const result = await donate(props.project.id, pendingAmount.value)
+    // Authoritative post-confirmation funding from the service (no client math).
     emit('donated', result.funding)
     notifications.success(
-      `Vielen Dank! Deine Spende von ${check.value} ${props.project.currency} wurde übernommen.`,
+      `Vielen Dank! Deine Spende von ${pendingAmount.value} ${props.project.currency} wurde übernommen.`,
     )
     amount.value = ''
+    closeCheckout()
   } catch (e) {
     notifications.error(toUserMessage(e), 'Spende fehlgeschlagen')
   } finally {
     submitting.value = false
   }
+}
+
+function closeCheckout() {
+  confirmOpen.value = false
+  pendingAmount.value = ''
+  estimate.value = null
+  estimateError.value = null
+}
+
+// Cancel from the overlay — never possible mid-send.
+function cancelDonate() {
+  if (submitting.value) return
+  closeCheckout()
 }
 </script>
 
@@ -143,6 +182,19 @@ async function onDonate() {
         </form>
         <p v-if="error && !funded" class="hero__error" role="alert">{{ error }}</p>
       </div>
+
+      <DonationConfirmDialog
+        :open="confirmOpen"
+        :project-title="project.title"
+        :currency="project.currency"
+        :amount="pendingAmount"
+        :estimate="estimate"
+        :estimating="estimating"
+        :estimate-error="estimateError"
+        :submitting="submitting"
+        @confirm="confirmDonate"
+        @cancel="cancelDonate"
+      />
     </div>
   </section>
 </template>
