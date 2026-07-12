@@ -6,6 +6,7 @@ import { decimalsFor, validateAmount, remainingAmountString } from '@/utils/amou
 import { mediaUrl } from '@/utils/media'
 import { useWalletStore } from '@/stores/wallet'
 import { useNotificationStore } from '@/stores/notifications'
+import { useCelebrationStore } from '@/stores/celebration'
 import { toUserMessage } from '@/utils/errors'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import TxConfirmDialog from '@/components/project/TxConfirmDialog.vue'
@@ -15,6 +16,7 @@ const emit = defineEmits<{ donated: [funding: Funding] }>()
 
 const wallet = useWalletStore()
 const notifications = useNotificationStore()
+const celebration = useCelebrationStore()
 const amount = ref('')
 const submitting = ref(false)
 // Inline error is for form-level validation only (empty/invalid amount, not
@@ -61,6 +63,13 @@ const closedMessage = computed(() =>
 
 const canFillRemaining = computed(() => donationsOpen.value && remaining.value !== '')
 
+// A funding is "complete" once nothing is left to raise (same wei-based test the
+// `funded` box uses). Comparing the pre- and post-donation funding tells us
+// whether THIS donation is the one that crossed the goal.
+function fundingComplete(f: Funding): boolean {
+  return f.goal > 0 && remainingAmountString(f.goal, f.raised) === ''
+}
+
 function fillRemaining() {
   amount.value = remaining.value
   error.value = null
@@ -105,13 +114,25 @@ async function confirmDonate() {
   submitting.value = true
   try {
     const result = await donate(props.project.id, pendingAmount.value)
+    // Did THIS donation push the project over its goal? Compare the pre-donation
+    // funding (props, still the old state here) with the authoritative result.
+    const justFinished = !fundingComplete(props.project.funding) && fundingComplete(result.funding)
     // Authoritative post-confirmation funding from the service (no client math).
     emit('donated', result.funding)
     // The donation reduced the wallet's balance — refresh the navbar chip.
     void wallet.refreshBalance()
-    notifications.success(
-      `Vielen Dank! Deine Spende von ${pendingAmount.value} ${props.project.currency} wurde übernommen.`,
-    )
+    if (justFinished) {
+      // Celebrate the donor who completed the project.
+      celebration.celebrate()
+      notifications.success(
+        `Deine Spende von ${pendingAmount.value} ${props.project.currency} hat das Ziel erreicht – das Projekt ist vollständig finanziert!`,
+        'Projekt finanziert',
+      )
+    } else {
+      notifications.success(
+        `Vielen Dank! Deine Spende von ${pendingAmount.value} ${props.project.currency} wurde übernommen.`,
+      )
+    }
     amount.value = ''
     closeCheckout()
   } catch (e) {
