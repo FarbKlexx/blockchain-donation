@@ -6,17 +6,21 @@ import {
   getProject,
   voteOnMilestone,
   payoutMilestone,
+  payoutRest,
   voteProjectSetup,
   createProjectNews,
   getMyProjectVotes,
   estimateVoteMilestoneGas,
   estimateVoteSetupGas,
+  estimatePayoutMilestoneGas,
+  estimatePayoutRestGas,
+  getRemainingBalance,
   type TxGasEstimate,
 } from '@/services/projectsService'
 import { useWalletStore } from '@/stores/wallet'
 import { useNotificationStore } from '@/stores/notifications'
 import { toUserMessage } from '@/utils/errors'
-import { formatDate } from '@/utils/format'
+import { formatDate, formatAmount } from '@/utils/format'
 import ProjectHero from '@/components/project/ProjectHero.vue'
 import TxConfirmDialog from '@/components/project/TxConfirmDialog.vue'
 import FundingCard from '@/components/project/FundingCard.vue'
@@ -59,112 +63,26 @@ const notifications = useNotificationStore()
 const myVotes = ref<Record<number, 'approve' | 'reject'>>({})
 const mySetupVote = ref<'approve' | 'reject' | null>(null)
 
-// ── Vote confirmation (checkout overlay) ─────────────────────────────────────
-// Validator votes are on-chain txs that cost gas, so — like donating — they go
-// through a confirmation overlay showing the gas estimate before signing. One
-// overlay serves both the project-setup vote and milestone votes.
-type PendingVote =
-  | { kind: 'setup'; approve: boolean }
-  | { kind: 'milestone'; index: number; approve: boolean }
+// ── Confirmation overlay for on-chain owner/validator actions ────────────────
+// Votes AND payouts all cost gas, so each goes through one shared checkout
+// overlay showing the gas estimate before signing.
+type PendingTx =
+  | { kind: 'vote-setup'; approve: boolean }
+  | { kind: 'vote-milestone'; index: number; approve: boolean }
+  | { kind: 'payout-milestone'; index: number }
+  | { kind: 'payout-rest' }
 
-const pendingVote = ref<PendingVote | null>(null)
-const voteConfirmOpen = ref(false)
-const voteEstimating = ref(false)
-const voteEstimate = ref<TxGasEstimate | null>(null)
-const voteEstimateError = ref<string | null>(null)
-const voteSubmitting = ref(false)
+const pendingTx = ref<PendingTx | null>(null)
+const txConfirmOpen = ref(false)
+const txEstimating = ref(false)
+const txEstimate = ref<TxGasEstimate | null>(null)
+const txEstimateError = ref<string | null>(null)
+const txSubmitting = ref(false)
+// The amount the owner will receive on a payout (info row); null for votes.
+const txPayoutAmount = ref<string | null>(null)
 
-// Per-target in-flight flags the cards/buttons read for their loading state.
-const votingMilestoneIndex = computed(() =>
-  voteSubmitting.value && pendingVote.value?.kind === 'milestone' ? pendingVote.value.index : null,
-)
-const setupVoteSubmitting = computed(
-  () => voteSubmitting.value && pendingVote.value?.kind === 'setup',
-)
-
-// Overlay display: the action being confirmed + the confirm-button label.
-const voteConfirmRows = computed(() => {
-  const pv = pendingVote.value
-  if (!pv) return []
-  const target =
-    pv.kind === 'setup' ? 'Projektstart' : `Meilenstein ${String(pv.index + 1).padStart(2, '0')}`
-  return [{ label: 'Abstimmung', value: `${target} · ${pv.approve ? 'Zustimmen' : 'Ablehnen'}` }]
-})
-const voteConfirmLabel = computed(() => (pendingVote.value?.approve ? 'Zustimmen' : 'Ablehnen'))
-
-// A vote button → open the confirmation overlay and estimate the gas (no tx yet).
-async function openVoteConfirm(pv: PendingVote) {
-  if (!project.value || voteSubmitting.value) return
-  pendingVote.value = pv
-  voteEstimate.value = null
-  voteEstimateError.value = null
-  voteConfirmOpen.value = true
-  voteEstimating.value = true
-  try {
-    const addr = project.value.contract.address
-    voteEstimate.value =
-      pv.kind === 'setup'
-        ? await estimateVoteSetupGas(addr, pv.approve)
-        : await estimateVoteMilestoneGas(addr, pv.index, pv.approve)
-  } catch (e) {
-    voteEstimateError.value = toUserMessage(e, 'Die Gaskosten konnten nicht geschätzt werden.')
-  } finally {
-    voteEstimating.value = false
-  }
-}
-
-function closeVoteConfirm() {
-  voteConfirmOpen.value = false
-  pendingVote.value = null
-  voteEstimate.value = null
-  voteEstimateError.value = null
-}
-
-function cancelVote() {
-  if (voteSubmitting.value) return
-  closeVoteConfirm()
-}
-
-// Confirmed in the overlay → sign and send the vote (setup or milestone).
-async function confirmVote() {
-  const pv = pendingVote.value
-  if (!project.value || !pv || voteSubmitting.value) return
-  voteSubmitting.value = true
-  try {
-    const addr = project.value.contract.address
-    if (pv.kind === 'setup') {
-      await voteProjectSetup(addr, pv.approve)
-      mySetupVote.value = pv.approve ? 'approve' : 'reject'
-    } else {
-      await voteOnMilestone(addr, pv.index, pv.approve)
-      myVotes.value[pv.index] = pv.approve ? 'approve' : 'reject'
-    }
-    // Re-read: a decisive vote can unlock the next payout, close, or fail the project.
-    await load()
-    notifications.success(
-      pv.kind === 'setup'
-        ? 'Deine Stimme zum Projektstart wurde gezählt.'
-        : 'Deine Stimme wurde gezählt.',
-    )
-    closeVoteConfirm()
-  } catch (e) {
-    notifications.error(toUserMessage(e), 'Abstimmung fehlgeschlagen')
-  } finally {
-    voteSubmitting.value = false
-  }
-}
-
-// Milestone vote button → open the confirmation overlay.
-function onVote(index: number, approve: boolean) {
-  openVoteConfirm({ kind: 'milestone', index, approve })
-}
-
-// Owner: pay out the next milestone. The milestone the owner may pay is
-// `currentMilestoneIndex`, but only in the Payout phase and once the previous
-// milestone is approved (its card shows 'completed'). Milestone 0 is gated by
-// the project-setup vote — reflected by contractStatus already being 'Payout'.
-const payingOut = ref(false)
-
+// Which milestone the owner may pay next: Payout phase, current index, previous
+// milestone approved (milestone 0 is gated instead by the setup vote).
 const payableIndex = computed(() => {
   const p = project.value
   if (!p || p.contractStatus !== 'Payout') return -1
@@ -174,19 +92,169 @@ const payableIndex = computed(() => {
   return p.milestones[k - 1]?.status === 'completed' ? k : -1
 })
 
-async function onPayout(index: number) {
-  if (!project.value || payingOut.value) return
-  payingOut.value = true
-  try {
-    await payoutMilestone(project.value.contract.address, index)
-    // Paying a milestone opens its validator vote — re-read to show it.
-    await load()
-    notifications.success('Der Meilenstein wurde ausgezahlt.')
-  } catch (e) {
-    notifications.error(toUserMessage(e), 'Auszahlung fehlgeschlagen')
-  } finally {
-    payingOut.value = false
+// Fully paid out and closed → the owner may sweep any residual contract balance.
+const projectClosed = computed(
+  () => !!project.value && project.value.contractStatus === 'Closed',
+)
+
+// Per-target in-flight flags the cards/buttons read for their loading state.
+const votingMilestoneIndex = computed(() =>
+  txSubmitting.value && pendingTx.value?.kind === 'vote-milestone' ? pendingTx.value.index : null,
+)
+const payingMilestoneIndex = computed(() =>
+  txSubmitting.value && pendingTx.value?.kind === 'payout-milestone' ? pendingTx.value.index : null,
+)
+const setupVoteSubmitting = computed(
+  () => txSubmitting.value && pendingTx.value?.kind === 'vote-setup',
+)
+const payoutRestSubmitting = computed(
+  () => txSubmitting.value && pendingTx.value?.kind === 'payout-rest',
+)
+
+// Overlay display, derived from the pending action.
+const isPayout = computed(
+  () => pendingTx.value?.kind === 'payout-milestone' || pendingTx.value?.kind === 'payout-rest',
+)
+const txConfirmTitle = computed(() =>
+  isPayout.value ? 'Auszahlung bestätigen' : 'Abstimmung bestätigen',
+)
+const txConfirmLabel = computed(() => {
+  const pt = pendingTx.value
+  if (pt?.kind === 'vote-setup' || pt?.kind === 'vote-milestone') {
+    return pt.approve ? 'Zustimmen' : 'Ablehnen'
   }
+  return 'Auszahlen'
+})
+const txSubmittingLabel = computed(() => (isPayout.value ? 'Zahle aus …' : 'Stimme ab …'))
+const txConfirmHint = computed(() =>
+  isPayout.value
+    ? 'Bei der Auszahlung zahlst du nur die Netzwerkgebühr (Gas); der freigegebene Betrag wird dir gutgeschrieben. Die tatsächlichen Kosten können niedriger ausfallen.'
+    : 'Für diese Abstimmung fällt nur die Netzwerkgebühr (Gas) an – es wird kein Betrag überwiesen. Die tatsächlichen Kosten können niedriger ausfallen.',
+)
+const txConfirmRows = computed<{ label: string; value: string }[]>(() => {
+  const pt = pendingTx.value
+  if (!pt) return []
+  const currency = project.value?.currency ?? ''
+  const msLabel = (i: number) => `Meilenstein ${String(i + 1).padStart(2, '0')}`
+  switch (pt.kind) {
+    case 'vote-setup':
+      return [{ label: 'Abstimmung', value: `Projektstart · ${pt.approve ? 'Zustimmen' : 'Ablehnen'}` }]
+    case 'vote-milestone':
+      return [{ label: 'Abstimmung', value: `${msLabel(pt.index)} · ${pt.approve ? 'Zustimmen' : 'Ablehnen'}` }]
+    case 'payout-milestone':
+    case 'payout-rest': {
+      const target = pt.kind === 'payout-milestone' ? msLabel(pt.index) : 'Restliche Vertragsmittel'
+      const rows = [{ label: 'Auszahlung', value: target }]
+      if (txPayoutAmount.value !== null) {
+        rows.push({ label: 'Betrag an dich', value: `${txPayoutAmount.value} ${currency}` })
+      }
+      return rows
+    }
+  }
+  return []
+})
+
+// Open the overlay for an action and estimate its gas (nothing signed yet).
+async function openTxConfirm(pt: PendingTx) {
+  if (!project.value || txSubmitting.value) return
+  const addr = project.value.contract.address
+  pendingTx.value = pt
+  txEstimate.value = null
+  txEstimateError.value = null
+  // Show what the owner receives (milestone amount is already known locally).
+  txPayoutAmount.value =
+    pt.kind === 'payout-milestone'
+      ? formatAmount(project.value.milestones[pt.index]?.allocated ?? 0)
+      : null
+  txConfirmOpen.value = true
+  txEstimating.value = true
+  try {
+    if (pt.kind === 'payout-rest') {
+      txPayoutAmount.value = await getRemainingBalance(addr)
+    }
+    switch (pt.kind) {
+      case 'vote-setup':
+        txEstimate.value = await estimateVoteSetupGas(addr, pt.approve)
+        break
+      case 'vote-milestone':
+        txEstimate.value = await estimateVoteMilestoneGas(addr, pt.index, pt.approve)
+        break
+      case 'payout-milestone':
+        txEstimate.value = await estimatePayoutMilestoneGas(addr, pt.index)
+        break
+      case 'payout-rest':
+        txEstimate.value = await estimatePayoutRestGas(addr)
+        break
+    }
+  } catch (e) {
+    txEstimateError.value = toUserMessage(e, 'Die Gaskosten konnten nicht geschätzt werden.')
+  } finally {
+    txEstimating.value = false
+  }
+}
+
+function closeTxConfirm() {
+  txConfirmOpen.value = false
+  pendingTx.value = null
+  txEstimate.value = null
+  txEstimateError.value = null
+  txPayoutAmount.value = null
+}
+
+function cancelTx() {
+  if (txSubmitting.value) return
+  closeTxConfirm()
+}
+
+// Confirmed in the overlay → sign and send the pending action.
+async function confirmTx() {
+  const pt = pendingTx.value
+  if (!project.value || !pt || txSubmitting.value) return
+  const addr = project.value.contract.address
+  const payout = isPayout.value
+  txSubmitting.value = true
+  try {
+    let message = ''
+    switch (pt.kind) {
+      case 'vote-setup':
+        await voteProjectSetup(addr, pt.approve)
+        mySetupVote.value = pt.approve ? 'approve' : 'reject'
+        message = 'Deine Stimme zum Projektstart wurde gezählt.'
+        break
+      case 'vote-milestone':
+        await voteOnMilestone(addr, pt.index, pt.approve)
+        myVotes.value[pt.index] = pt.approve ? 'approve' : 'reject'
+        message = 'Deine Stimme wurde gezählt.'
+        break
+      case 'payout-milestone':
+        await payoutMilestone(addr, pt.index)
+        message = 'Der Meilenstein wurde ausgezahlt.'
+        break
+      case 'payout-rest':
+        await payoutRest(addr)
+        message = 'Die restlichen Mittel wurden ausgezahlt.'
+        break
+    }
+    // Re-read: a vote/payout can unlock the next payout, close, or fail the project.
+    await load()
+    notifications.success(message)
+    closeTxConfirm()
+  } catch (e) {
+    notifications.error(toUserMessage(e), payout ? 'Auszahlung fehlgeschlagen' : 'Abstimmung fehlgeschlagen')
+  } finally {
+    txSubmitting.value = false
+  }
+}
+
+// Action buttons → open the confirmation overlay.
+function onVote(index: number, approve: boolean) {
+  openTxConfirm({ kind: 'vote-milestone', index, approve })
+}
+function onPayout(index: number) {
+  openTxConfirm({ kind: 'payout-milestone', index })
+}
+function onPayoutRest() {
+  openTxConfirm({ kind: 'payout-rest' })
 }
 
 // Validator: approve/reject the PROJECT SETUP while the campaign is in
@@ -202,7 +270,7 @@ const canVoteSetup = computed(() => setupVoteOpen.value && isValidator.value)
 
 // Setup vote button → open the confirmation overlay.
 function onVoteSetup(approve: boolean) {
-  openVoteConfirm({ kind: 'setup', approve })
+  openTxConfirm({ kind: 'vote-setup', approve })
 }
 
 // Lifecycle gate (Spende → Stimme → Auszahlung): validators may only vote on
@@ -264,7 +332,7 @@ function enterProject() {
   activeTab.value = 'beschreibung'
   myVotes.value = {}
   mySetupVote.value = null
-  closeVoteConfirm()
+  closeTxConfirm()
   newsOpen.value = false
   resetNewsForm()
   load()
@@ -512,10 +580,31 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
                 :my-vote="myVotes[i] ?? null"
                 :voting="votingMilestoneIndex === i"
                 :can-payout="isOwner && i === payableIndex"
-                :paying-out="payingOut && i === payableIndex"
+                :paying-out="payingMilestoneIndex === i"
                 @vote="onVote(i, $event)"
                 @payout="onPayout(i)"
               />
+            </div>
+
+            <!-- Owner: sweep any funds left in the contract once the project is
+                 closed (all milestones paid out). -->
+            <div v-if="isOwner && projectClosed" class="rest">
+              <div class="rest__head">
+                <AppIcon name="circle-check" :size="16" />
+                <h3 class="rest__title">Projekt abgeschlossen</h3>
+              </div>
+              <p class="rest__text">
+                Alle Meilensteine wurden ausgezahlt. Verbliebene Mittel im Vertrag kannst du dir hier
+                auszahlen.
+              </p>
+              <button
+                type="button"
+                class="rest__btn"
+                :disabled="payoutRestSubmitting"
+                @click="onPayoutRest"
+              >
+                {{ payoutRestSubmitting ? 'Zahle aus …' : 'Restliche Mittel auszahlen' }}
+              </button>
             </div>
           </div>
 
@@ -626,23 +715,23 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
         </aside>
       </div>
 
-      <!-- Checkout overlay for validator votes (gas-only, no value transfer). -->
+      <!-- Shared checkout overlay for votes AND payouts (both gas-only). -->
       <TxConfirmDialog
-        :open="voteConfirmOpen"
-        title="Abstimmung bestätigen"
+        :open="txConfirmOpen"
+        :title="txConfirmTitle"
         :summary="project.title"
-        :rows="voteConfirmRows"
+        :rows="txConfirmRows"
         total-label="Netzwerkgebühr (max.)"
         :currency="project.currency"
-        hint="Für diese Abstimmung fällt nur die Netzwerkgebühr (Gas) an – es wird kein Betrag überwiesen. Die tatsächlichen Kosten können niedriger ausfallen."
-        :confirm-label="voteConfirmLabel"
-        submitting-label="Stimme ab …"
-        :estimate="voteEstimate"
-        :estimating="voteEstimating"
-        :estimate-error="voteEstimateError"
-        :submitting="voteSubmitting"
-        @confirm="confirmVote"
-        @cancel="cancelVote"
+        :hint="txConfirmHint"
+        :confirm-label="txConfirmLabel"
+        :submitting-label="txSubmittingLabel"
+        :estimate="txEstimate"
+        :estimating="txEstimating"
+        :estimate-error="txEstimateError"
+        :submitting="txSubmitting"
+        @confirm="confirmTx"
+        @cancel="cancelTx"
       />
     </template>
 
@@ -813,6 +902,53 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+/* Owner: residual-funds payout once the project is closed */
+.rest {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 24px;
+  background: var(--bd-green-tint);
+  border: 1px solid var(--bd-green);
+  border-radius: var(--bd-radius-md);
+}
+
+.rest__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--bd-green);
+}
+
+.rest__title {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.rest__text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--bd-grey-text);
+}
+
+.rest__btn {
+  align-self: flex-start;
+  padding: 10px 16px;
+  border: none;
+  border-radius: var(--bd-radius-sm);
+  background: var(--bd-black);
+  color: var(--bd-surface);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rest__btn:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 /* Project-setup approval */

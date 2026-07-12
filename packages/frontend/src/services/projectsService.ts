@@ -898,6 +898,59 @@ export async function payoutMilestone(
   }
 }
 
+/** Estimate the gas cost of a milestone payout (non-payable → owner receives the
+ *  funds, only pays gas). No value is sent, so amount = 0. */
+export async function estimatePayoutMilestoneGas(
+  projectAddress: string,
+  milestoneIndex: number,
+): Promise<TxGasEstimate> {
+  assertLocalSigner()
+  const { signer, provider } = await getBlockchainContext()
+  const contract = Donation__factory.connect(projectAddress, signer)
+  return buildGasEstimate(provider, () => contract.payout.estimateGas(milestoneIndex), 0n)
+}
+
+export interface PayoutRestResult {
+  txHash: string
+  currentStatus: string
+}
+
+/**
+ * Owner-only: pay out any funds left in the contract after the project is CLOSED
+ * (all milestones released). A safety net for a residual balance; the contract
+ * enforces `onlyWhenClosed` and isOwner. Authoritative status is re-read after.
+ */
+export async function payoutRest(projectAddress: string): Promise<PayoutRestResult> {
+  assertLocalSigner()
+  const { signer } = await getBlockchainContext()
+  const contract = Donation__factory.connect(projectAddress, signer)
+
+  const tx = await contract.payoutRest()
+  const receipt = await tx.wait()
+  if (!receipt || receipt.status === 0) {
+    throw new Error('Die Auszahlung auf der Blockchain ist fehlgeschlagen.')
+  }
+
+  const rawStatus = await contract.currentStatus()
+  return { txHash: tx.hash, currentStatus: STATUS_MAP[Number(rawStatus)] ?? 'Closed' }
+}
+
+/** Estimate the gas cost of the rest payout (non-payable → gas only, amount = 0). */
+export async function estimatePayoutRestGas(projectAddress: string): Promise<TxGasEstimate> {
+  assertLocalSigner()
+  const { signer, provider } = await getBlockchainContext()
+  const contract = Donation__factory.connect(projectAddress, signer)
+  return buildGasEstimate(provider, () => contract.payoutRest.estimateGas(), 0n)
+}
+
+/** The funds currently held by the contract (the amount `payoutRest` would send
+ *  to the owner), as a clean decimal string in the native coin. Read-only. */
+export async function getRemainingBalance(projectAddress: string): Promise<string> {
+  const provider = getReadProvider()
+  const contract = Donation__factory.connect(projectAddress, provider)
+  return trimTrailingZeros(ethers.formatEther(await contract.getContractBalance()))
+}
+
 /** The editable, OFF-CHAIN slice of a project — exactly the metadata an owner
  *  may change. Mirrors the backend `ProjectMetadata` payload (minus the join
  *  keys). Nothing contract-owned (goal/donations/validators/milestone funds,
