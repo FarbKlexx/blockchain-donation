@@ -1,8 +1,25 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { percentFunded, formatAmount, daysLeftUntil, hasEnded, timeLeftShort } from '../format'
-import { validateAmount, decimalsFor, NATIVE_CURRENCY } from '../amount'
+import { validateAmount, decimalsFor, NATIVE_CURRENCY, remainingAmountString } from '../amount'
 import { shortenAddress, explorerAddressUrl } from '../address'
 import { mediaUrl } from '../media'
+
+describe('remainingAmountString', () => {
+  it('returns the clean difference for whole numbers', () => {
+    expect(remainingAmountString(66000, 47520)).toBe('18480')
+  })
+  it('avoids float artifacts by subtracting in wei', () => {
+    // Plain float subtraction would give 0.06999999999999999.
+    expect(remainingAmountString(0.1, 0.03)).toBe('0.07')
+  })
+  it('returns the full goal when nothing is raised yet', () => {
+    expect(remainingAmountString(0.05, 0)).toBe('0.05')
+  })
+  it('returns "" once the goal is met or exceeded', () => {
+    expect(remainingAmountString(100, 100)).toBe('')
+    expect(remainingAmountString(100, 120)).toBe('')
+  })
+})
 
 describe('percentFunded', () => {
   it('rounds and clamps to 0–100', () => {

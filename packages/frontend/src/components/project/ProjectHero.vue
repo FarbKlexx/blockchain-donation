@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import type { Funding, Project } from '@/types/project'
 import { donate } from '@/services/projectsService'
-import { decimalsFor, validateAmount } from '@/utils/amount'
+import { decimalsFor, validateAmount, remainingAmountString } from '@/utils/amount'
 import { mediaUrl } from '@/utils/media'
 import { useWalletStore } from '@/stores/wallet'
 import { useNotificationStore } from '@/stores/notifications'
@@ -21,6 +21,27 @@ const submitting = ref(false)
 const error = ref<string | null>(null)
 
 const decimals = computed(() => decimalsFor(props.project.currency))
+
+// The still-needed amount (goal − raised) as a ready-to-donate input string.
+// Offered as a "Restbetrag" shortcut only while donations are open (Funding) and
+// something is actually left — so the user never has to compute it by hand.
+const remaining = computed(() =>
+  remainingAmountString(props.project.funding.goal, props.project.funding.raised),
+)
+
+// Fully funded: nothing left to raise (goal reached, computed in wei). Donations
+// are closed on-chain at this point, so the box switches to a green "finished"
+// state that every viewer sees — logged in or not.
+const funded = computed(() => props.project.funding.goal > 0 && remaining.value === '')
+
+const canFillRemaining = computed(
+  () => props.project.contractStatus === 'Funding' && remaining.value !== '',
+)
+
+function fillRemaining() {
+  amount.value = remaining.value
+  error.value = null
+}
 
 // INTEGRATION POINT: "Jetzt unterstützen" — the donation transaction.
 // Calls the mock service today; wire to the escrow contract's donate().
@@ -77,26 +98,50 @@ async function onDonate() {
       </div>
 
       <div class="hero__donate-wrap">
-        <form class="hero__donate" :class="{ 'hero__donate--error': error }" @submit.prevent="onDonate">
-          <span class="hero__currency">{{ project.currency }}</span>
-          <!-- type="text", NOT "number": Vue auto-casts v-model on number inputs
-               to a JS float, but the amount must stay a decimal STRING all the
-               way to parseEther (see utils/amount.ts). inputmode keeps the
-               numeric keyboard on mobile; validateAmount rejects bad input. -->
-          <input
-            v-model="amount"
-            class="hero__input"
-            type="text"
-            inputmode="decimal"
-            placeholder="Betrag eingeben"
-            aria-label="Spendenbetrag"
-            :aria-invalid="error ? 'true' : undefined"
-          />
-          <button class="hero__submit" type="submit" :disabled="submitting">
-            {{ submitting ? 'Sende …' : 'Jetzt unterstützen' }}
-          </button>
+        <!-- Fully funded → the box turns green and donations are closed, so
+             every viewer sees the project is finished. -->
+        <form
+          class="hero__donate"
+          :class="{ 'hero__donate--error': error && !funded, 'hero__donate--funded': funded }"
+          @submit.prevent="onDonate"
+        >
+          <template v-if="funded">
+            <span class="hero__funded">
+              <AppIcon name="circle-check" :size="18" />
+              Ziel erreicht – vollständig finanziert
+            </span>
+            <button class="hero__submit" type="button" disabled>Finanziert</button>
+          </template>
+          <template v-else>
+            <span class="hero__currency">{{ project.currency }}</span>
+            <!-- type="text", NOT "number": Vue auto-casts v-model on number inputs
+                 to a JS float, but the amount must stay a decimal STRING all the
+                 way to parseEther (see utils/amount.ts). inputmode keeps the
+                 numeric keyboard on mobile; validateAmount rejects bad input. -->
+            <input
+              v-model="amount"
+              class="hero__input"
+              type="text"
+              inputmode="decimal"
+              placeholder="Betrag eingeben"
+              aria-label="Spendenbetrag"
+              :aria-invalid="error ? 'true' : undefined"
+            />
+            <button
+              v-if="canFillRemaining"
+              class="hero__rest"
+              type="button"
+              :title="`Restbetrag einsetzen: ${remaining} ${project.currency}`"
+              @click="fillRemaining"
+            >
+              Restbetrag
+            </button>
+            <button class="hero__submit" type="submit" :disabled="submitting">
+              {{ submitting ? 'Sende …' : 'Jetzt unterstützen' }}
+            </button>
+          </template>
         </form>
-        <p v-if="error" class="hero__error" role="alert">{{ error }}</p>
+        <p v-if="error && !funded" class="hero__error" role="alert">{{ error }}</p>
       </div>
     </div>
   </section>
@@ -205,6 +250,26 @@ async function onDonate() {
   color: var(--bd-black);
 }
 
+/* Secondary shortcut that fills the input with the remaining amount. Sits
+   between the input and the primary submit CTA, styled subtly so it reads as a
+   helper, not a second call to action. */
+.hero__rest {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--bd-green);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.hero__rest:hover {
+  text-decoration: underline;
+}
+
 .hero__submit {
   background: var(--bd-black);
   color: var(--bd-surface);
@@ -229,6 +294,24 @@ async function onDonate() {
 
 .hero__donate--error {
   border-color: #dc2626;
+}
+
+/* Fully funded: green box + a clear "finished" label; the (disabled) button
+   greys out so it's obvious no more donations are possible. */
+.hero__donate--funded {
+  border-color: var(--bd-green);
+  background: var(--bd-green-tint);
+}
+
+.hero__funded {
+  flex: 1 1 0;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--bd-green);
 }
 
 .hero__error {

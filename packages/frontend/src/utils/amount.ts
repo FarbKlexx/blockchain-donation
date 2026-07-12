@@ -5,6 +5,8 @@
 // `parseEther(amount)` → bigint wei. We never do float math on the value
 // that becomes a transaction.
 
+import { parseEther, formatEther } from 'ethers'
+
 // Donations are the chain's NATIVE coin (the contract's `donate()` takes
 // `msg.value` — there is no ERC-20 token), so there is a single currency for
 // every campaign. Keyed to the deployment chain alongside the explorer config
@@ -49,4 +51,32 @@ export function validateAmount(input: string, decimals: number): AmountValidatio
   }
 
   return { ok: true, value: trimmed }
+}
+
+/** Drop trailing fractional zeros (and a bare trailing dot) from a decimal
+ *  string, so "18480.0" → "18480" and "0.070" → "0.07". Integers are untouched. */
+function trimTrailingZeros(value: string): string {
+  if (!value.includes('.')) return value
+  return value.replace(/0+$/, '').replace(/\.$/, '')
+}
+
+/**
+ * The amount still needed to reach the goal (`goal − raised`), as a clean
+ * decimal STRING for the donation input — exactly what the "Restbetrag" button
+ * fills in, and what `parseEther` then consumes.
+ *
+ * Computed in wei (bigint), NOT by subtracting the display floats, so it never
+ * yields artifacts like `0.1 − 0.03 = 0.06999999999999999`. Returns '' when the
+ * goal is already met (nothing to add) or the inputs can't be parsed. Native-coin
+ * (18-decimal) amounts, matching donate()'s `parseEther`.
+ */
+export function remainingAmountString(goal: number, raised: number): string {
+  let remainingWei: bigint
+  try {
+    remainingWei = parseEther(String(goal)) - parseEther(String(raised))
+  } catch {
+    return ''
+  }
+  if (remainingWei <= 0n) return ''
+  return trimTrailingZeros(formatEther(remainingWei))
 }
