@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { Funding, Project } from '@/types/project'
-import { getProject, voteOnMilestone, payoutMilestone, voteProjectSetup } from '@/services/projectsService'
+import { getProject, voteOnMilestone, payoutMilestone, voteProjectSetup, createProjectNews } from '@/services/projectsService'
 import { useWalletStore } from '@/stores/wallet'
 import { formatDate } from '@/utils/format'
 import ProjectHero from '@/components/project/ProjectHero.vue'
@@ -170,6 +170,9 @@ function enterProject() {
   payoutError.value = null
   mySetupVote.value = null
   setupError.value = null
+  newsOpen.value = false
+  resetNewsForm()
+  publishError.value = null
   load()
 }
 
@@ -178,6 +181,93 @@ function enterProject() {
 function onDonated(funding: Funding) {
   if (project.value) {
     project.value.funding = funding
+  }
+}
+
+// ── Owner: publish a news update ─────────────────────────────────────────────
+// Appends ONE entry via POST /api/projects/:id/news, so a quick update never
+// rewrites the project's other news (the bulk edit in ProjectEditView still does
+// a full replace). After it lands we re-read the project so the new entry shows
+// alongside the existing ones.
+const newsOpen = ref(false)
+const publishing = ref(false)
+const publishError = ref<string | null>(null)
+const newsForm = reactive<{ date: string; title: string; body: string; images: string[] }>({
+  date: '',
+  title: '',
+  body: '',
+  images: [],
+})
+
+// Local date as YYYY-MM-DD (input[type=date] value / backend `date` string).
+function todayIso(): string {
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+function resetNewsForm() {
+  newsForm.date = ''
+  newsForm.title = ''
+  newsForm.body = ''
+  newsForm.images = []
+}
+
+function openNewsComposer() {
+  publishError.value = null
+  newsForm.date = todayIso()
+  newsOpen.value = true
+}
+
+function closeNewsComposer() {
+  newsOpen.value = false
+  resetNewsForm()
+}
+
+// Images are uploads only (no external URLs). Prototype: the file isn't actually
+// uploaded — we record the chosen filename as the placeholder key the backend
+// would assign. Mirrors the create/edit views.
+function normalizeUploadPath(fileName: string, projectId?: string): string {
+  if (!fileName) return ''
+  if (/^(https?:)?\/\//.test(fileName) || fileName.startsWith('/')) return fileName
+  if (fileName.startsWith('uploads/')) return fileName
+  const folder = projectId ? projectId.replace(/^\/|\/$/g, '') : ''
+  return folder ? `uploads/${folder}/${fileName}` : `uploads/${fileName}`
+}
+
+function onNewsImages(e: Event) {
+  const input = e.target as HTMLInputElement
+  if (input.files) {
+    newsForm.images.push(
+      ...Array.from(input.files).map((f) => normalizeUploadPath(f.name, project.value?.id)),
+    )
+  }
+  input.value = ''
+}
+
+// The backend accepts a title-or-body; we require at least a title (it's the
+// entry's heading) so an empty update can't be published by mistake.
+const canPublish = computed(() => newsForm.title.trim().length > 0)
+
+async function publishNews() {
+  if (!project.value || publishing.value || !canPublish.value) return
+  publishing.value = true
+  publishError.value = null
+  try {
+    await createProjectNews(project.value.id, {
+      date: newsForm.date || todayIso(),
+      title: newsForm.title.trim(),
+      body: newsForm.body.trim(),
+      images: newsForm.images.map((s) => s.trim()).filter(Boolean),
+    })
+    closeNewsComposer()
+    // Re-read (keeps the active tab) so the appended entry appears with the rest.
+    await load()
+  } catch (e) {
+    publishError.value =
+      e instanceof Error ? e.message : 'Veröffentlichen fehlgeschlagen. Bitte erneut versuchen.'
+  } finally {
+    publishing.value = false
   }
 }
 
@@ -318,6 +408,88 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
 
           <!-- Neuigkeiten -->
           <div v-else class="news">
+            <!-- Owner: publish a new update. Appends a single entry via the news
+                 endpoint (no full-project rewrite) and re-reads on success. -->
+            <div v-if="isOwner" class="news-publish">
+              <button
+                v-if="!newsOpen"
+                type="button"
+                class="news-publish__toggle"
+                @click="openNewsComposer"
+              >
+                <AppIcon name="pencil" :size="14" />
+                Update veröffentlichen
+              </button>
+
+              <form v-else class="news-publish__form" @submit.prevent="publishNews">
+                <div class="news-publish__row">
+                  <label class="npf">
+                    <span class="npf__label">Titel</span>
+                    <input
+                      v-model="newsForm.title"
+                      class="npf__input"
+                      type="text"
+                      placeholder="Worum geht es?"
+                    />
+                  </label>
+                  <label class="npf npf--date">
+                    <span class="npf__label">Datum</span>
+                    <input v-model="newsForm.date" class="npf__input" type="date" />
+                  </label>
+                </div>
+                <label class="npf">
+                  <span class="npf__label">Text</span>
+                  <textarea
+                    v-model="newsForm.body"
+                    class="npf__input npf__input--area"
+                    rows="3"
+                    placeholder="Was gibt es Neues?"
+                  />
+                </label>
+                <div class="npf">
+                  <div class="npf__images-head">
+                    <span class="npf__label">Bilder</span>
+                    <label class="news-publish__filebtn">
+                      + Bilder
+                      <input type="file" accept="image/*" multiple hidden @change="onNewsImages" />
+                    </label>
+                  </div>
+                  <div v-for="(img, j) in newsForm.images" :key="j" class="npf__chosen">
+                    <span class="npf__chosen-name">{{ img }}</span>
+                    <button
+                      type="button"
+                      class="npf__chosen-x"
+                      aria-label="Bild entfernen"
+                      @click="newsForm.images.splice(j, 1)"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <span class="npf__hint">
+                    Nur eigener Upload · im Prototyp Platzhalter (Datei wird nicht gespeichert).
+                  </span>
+                </div>
+                <p v-if="publishError" class="news-publish__error" role="alert">{{ publishError }}</p>
+                <div class="news-publish__actions">
+                  <button
+                    type="button"
+                    class="news-publish__btn news-publish__btn--ghost"
+                    :disabled="publishing"
+                    @click="closeNewsComposer"
+                  >
+                    Abbrechen
+                  </button>
+                  <button
+                    type="submit"
+                    class="news-publish__btn news-publish__btn--primary"
+                    :disabled="publishing || !canPublish"
+                  >
+                    {{ publishing ? 'Veröffentliche …' : 'Veröffentlichen' }}
+                  </button>
+                </div>
+              </form>
+            </div>
+
             <article v-for="(entry, i) in project.news" :key="i" class="news__entry">
               <p class="news__meta">{{ formatDate(entry.date) }}</p>
               <h3 class="news__title">{{ entry.title }}</h3>
@@ -329,7 +501,7 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
               />
               <p class="news__body">{{ entry.body }}</p>
             </article>
-            <p v-if="project.news.length === 0" class="detail__state">
+            <p v-if="project.news.length === 0" class="news__empty">
               Noch keine Neuigkeiten.
             </p>
           </div>
@@ -643,6 +815,199 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
   font-size: 16px;
   line-height: 1.6;
   color: var(--bd-grey-text);
+}
+
+.news__empty {
+  font-size: 14px;
+  color: var(--bd-grey-text);
+}
+
+/* Neuigkeiten: owner publish composer */
+.news-publish {
+  padding-bottom: 4px;
+}
+
+.news-publish__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: 1px solid var(--bd-stroke);
+  border-radius: var(--bd-radius-sm);
+  background: var(--bd-surface);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--bd-black);
+  cursor: pointer;
+}
+
+.news-publish__toggle:hover {
+  border-color: var(--bd-black);
+}
+
+.news-publish__form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  background: var(--bd-surface);
+  border: 1px solid var(--bd-stroke);
+  border-radius: var(--bd-radius-lg);
+  box-shadow: var(--bd-shadow-card);
+}
+
+.news-publish__row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+}
+
+.npf {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.npf--date {
+  flex: 0 0 170px;
+}
+
+.npf__label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--bd-grey-text);
+}
+
+.npf__input {
+  width: 100%;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--bd-black);
+  background: var(--bd-surface);
+  border: 1px solid var(--bd-stroke);
+  border-radius: var(--bd-radius-sm);
+  padding: 10px 12px;
+}
+
+.npf__input:focus {
+  outline: none;
+  border-color: var(--bd-black);
+}
+
+.npf__input--area {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.npf__images-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.news-publish__filebtn {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: var(--bd-radius-sm);
+  background: var(--bd-grey);
+  color: var(--bd-black);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.npf__chosen {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  border: 1px solid var(--bd-stroke);
+  border-radius: var(--bd-radius-sm);
+  font-size: 13px;
+}
+
+.npf__chosen-name {
+  word-break: break-all;
+}
+
+.npf__chosen-x {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--bd-grey-text);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.npf__hint {
+  font-size: 12px;
+  color: var(--bd-grey-text);
+}
+
+.news-publish__error {
+  font-size: 13px;
+  color: #dc2626;
+}
+
+.news-publish__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.news-publish__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--bd-radius-sm);
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 10px 16px;
+  cursor: pointer;
+}
+
+.news-publish__btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.news-publish__btn--primary {
+  background: var(--bd-black);
+  color: var(--bd-surface);
+}
+
+.news-publish__btn--ghost {
+  background: transparent;
+  color: var(--bd-grey-text);
+  border: 1px solid var(--bd-stroke);
+}
+
+.news-publish__btn--ghost:hover:not(:disabled) {
+  border-color: var(--bd-black);
+  color: var(--bd-black);
+}
+
+@media (max-width: 640px) {
+  .news-publish__row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .npf--date {
+    flex-basis: auto;
+  }
 }
 
 @media (max-width: 1000px) {

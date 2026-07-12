@@ -208,12 +208,25 @@ export interface ProjectNewsCreateResult extends NewsEntry {
   project_id: string
 }
 
+// The backend wraps the persisted row in an envelope: { status, news }.
+interface CreateNewsResponse {
+  status: string
+  news: ProjectNewsCreateResult
+}
+
+/**
+ * Append a single news entry to an existing project (POST /api/projects/:id/news).
+ * Unlike the bulk metadata PUT (updateProjectMetadata), this only inserts the one
+ * entry — it never rewrites the project's other news. Returns the persisted row
+ * (with its backend-assigned id), unwrapped from the response envelope.
+ */
 export async function createProjectNews(projectId: string, news: NewsEntry): Promise<ProjectNewsCreateResult> {
-  return fetchJson<ProjectNewsCreateResult>(`/api/projects/${projectId}/news`, {
+  const response = await fetchJson<CreateNewsResponse>(`/api/projects/${projectId}/news`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(news),
   })
+  return response.news
 }
 
 // ── Account roles (one-time scan at login) ───────────────────────────────────
