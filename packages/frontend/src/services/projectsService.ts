@@ -471,6 +471,9 @@ function mergeProject(c: ContractCampaign, m: ProjectMetadata): Project {
     // milestone the owner may pay / validators may vote on from these.
     contractStatus: c.currentStatus,
     currentMilestoneIndex: c.currentMilestoneIndex,
+    // Failure/refund state, passed straight through for the failed-project UI.
+    refundableBalance: c.refundableBalance,
+    votingDeadline: c.votingDeadline,
     projectSetup: {
       approvedCount: c.projectSetup.approvedCount,
       rejectedCount: c.projectSetup.rejectedCount,
@@ -949,6 +952,122 @@ export async function getRemainingBalance(projectAddress: string): Promise<strin
   const provider = getReadProvider()
   const contract = Donation__factory.connect(projectAddress, provider)
   return trimTrailingZeros(ethers.formatEther(await contract.getContractBalance()))
+}
+
+// ── Failure & refunds (donor payback) ────────────────────────────────────────
+
+export interface RefundInfo {
+  /** The account's total contribution to this project (native coin); "0" if it
+   *  never donated or has already been refunded. */
+  donated: string
+  /** The proportional share it can reclaim now from the refundable balance
+   *  (native coin) — mirrors the contract's `donated × refundable / total`. */
+  refundable: string
+}
+
+/**
+ * Read the connected account's refund position for a (failed) project: how much
+ * it donated and the share it can reclaim. Read-only. `donated === "0"` means
+ * nothing to reclaim (never donated, or already refunded — the contract zeroes
+ * the balance on refund).
+ */
+export async function getRefundInfo(projectAddress: string, account: string): Promise<RefundInfo> {
+  const provider = getReadProvider()
+  const contract = Donation__factory.connect(projectAddress, provider)
+  const [donatedWei, refundableWei, totalWei] = await Promise.all([
+    contract.donations(account),
+    contract.refundableBalance(),
+    contract.totalDonations(),
+  ])
+  const shareWei = totalWei > 0n ? (donatedWei * refundableWei) / totalWei : 0n
+  return {
+    donated: trimTrailingZeros(ethers.formatEther(donatedWei)),
+    refundable: trimTrailingZeros(ethers.formatEther(shareWei)),
+  }
+}
+
+export interface TxResult {
+  txHash: string
+  currentStatus: string
+}
+
+/**
+ * Donor-only: reclaim this account's proportional share of a FAILED project's
+ * funds (`refund()`). Only valid while `Failed`; the contract zeroes the donor's
+ * balance so it can't be claimed twice. Authoritative status re-read after.
+ */
+export async function refund(projectAddress: string): Promise<TxResult> {
+  assertLocalSigner()
+  const { signer } = await getBlockchainContext()
+  const contract = Donation__factory.connect(projectAddress, signer)
+  const tx = await contract.refund()
+  const receipt = await tx.wait()
+  if (!receipt || receipt.status === 0) {
+    throw new Error('Die Rückzahlung auf der Blockchain ist fehlgeschlagen.')
+  }
+  const rawStatus = await contract.currentStatus()
+  return { txHash: tx.hash, currentStatus: STATUS_MAP[Number(rawStatus)] ?? 'Failed' }
+}
+
+/** Estimate the gas cost of a refund (donor receives funds, pays only gas). */
+export async function estimateRefundGas(projectAddress: string): Promise<TxGasEstimate> {
+  assertLocalSigner()
+  const { signer, provider } = await getBlockchainContext()
+  const contract = Donation__factory.connect(projectAddress, signer)
+  return buildGasEstimate(provider, () => contract.refund.estimateGas(), 0n)
+}
+
+/**
+ * Flip a campaign whose funding period ended WITHOUT reaching the goal to Failed
+ * (`markAsFailedFunding`) — which fixes the refundable balance so donors can
+ * reclaim. Callable by anyone once the conditions hold (the contract checks
+ * onlyDuringFunding, past `end`, goal not reached).
+ */
+export async function markAsFailedFunding(projectAddress: string): Promise<TxResult> {
+  assertLocalSigner()
+  const { signer } = await getBlockchainContext()
+  const contract = Donation__factory.connect(projectAddress, signer)
+  const tx = await contract.markAsFailedFunding()
+  const receipt = await tx.wait()
+  if (!receipt || receipt.status === 0) {
+    throw new Error('Die Aktion auf der Blockchain ist fehlgeschlagen.')
+  }
+  const rawStatus = await contract.currentStatus()
+  return { txHash: tx.hash, currentStatus: STATUS_MAP[Number(rawStatus)] ?? 'Failed' }
+}
+
+export async function estimateMarkAsFailedFundingGas(projectAddress: string): Promise<TxGasEstimate> {
+  assertLocalSigner()
+  const { signer, provider } = await getBlockchainContext()
+  const contract = Donation__factory.connect(projectAddress, signer)
+  return buildGasEstimate(provider, () => contract.markAsFailedFunding.estimateGas(), 0n)
+}
+
+/**
+ * Flip a campaign stuck in ToBeApproved/Payout whose vote deadline has passed to
+ * Failed (`markAsFailedDueToExpiredVoting`), enabling refunds. Callable by anyone
+ * once the deadline is exceeded (the contract enforces the conditions).
+ */
+export async function markAsFailedDueToExpiredVoting(projectAddress: string): Promise<TxResult> {
+  assertLocalSigner()
+  const { signer } = await getBlockchainContext()
+  const contract = Donation__factory.connect(projectAddress, signer)
+  const tx = await contract.markAsFailedDueToExpiredVoting()
+  const receipt = await tx.wait()
+  if (!receipt || receipt.status === 0) {
+    throw new Error('Die Aktion auf der Blockchain ist fehlgeschlagen.')
+  }
+  const rawStatus = await contract.currentStatus()
+  return { txHash: tx.hash, currentStatus: STATUS_MAP[Number(rawStatus)] ?? 'Failed' }
+}
+
+export async function estimateMarkAsFailedExpiredVotingGas(
+  projectAddress: string,
+): Promise<TxGasEstimate> {
+  assertLocalSigner()
+  const { signer, provider } = await getBlockchainContext()
+  const contract = Donation__factory.connect(projectAddress, signer)
+  return buildGasEstimate(provider, () => contract.markAsFailedDueToExpiredVoting.estimateGas(), 0n)
 }
 
 /** The editable, OFF-CHAIN slice of a project — exactly the metadata an owner

@@ -24,6 +24,9 @@
 //   roguelike           (Closed)  donors #14–#17 → all validators, owner #3
 //   suppenkueche        (Payout)  donors #18,#19,#6,#7 → all validators, owner #4
 //   wiederaufforstung   (Funding) donors #8–#11,  owner #5
+// The refund demo `lastenrad-kollektiv` (Failed after a milestone rejection) is
+// funded from a FIXED set #10–#13 — so the "Beispiel-Spender" persona (#10) can
+// reclaim its share in the UI — and does NOT consume the rotating cursor above.
 
 export interface MockUser {
   /** Stable key for the option. */
@@ -43,7 +46,8 @@ export const MOCK_USERS: MockUser[] = [
   {
     key: 'donor',
     label: 'Beispiel-Spender',
-    description: 'Hat zwei Projekte unterstützt — sieht „Von mir unterstützt". (Account #10)',
+    description:
+      'Unterstützt mehrere Projekte, darunter ein gescheitertes — kann dort seine Spende zurückfordern. (Account #10)',
     address: '0xBcd4042DE499D14e55001CcbB24a551F3b954096',
     privateKey: '0xf214f2b2cd398c806f84e317254e0f0b801d0643303237d97a22a48e01628897',
   },

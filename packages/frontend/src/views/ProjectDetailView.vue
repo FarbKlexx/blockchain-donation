@@ -15,12 +15,20 @@ import {
   estimatePayoutMilestoneGas,
   estimatePayoutRestGas,
   getRemainingBalance,
+  refund,
+  estimateRefundGas,
+  getRefundInfo,
+  markAsFailedFunding,
+  estimateMarkAsFailedFundingGas,
+  markAsFailedDueToExpiredVoting,
+  estimateMarkAsFailedExpiredVotingGas,
   type TxGasEstimate,
+  type RefundInfo,
 } from '@/services/projectsService'
 import { useWalletStore } from '@/stores/wallet'
 import { useNotificationStore } from '@/stores/notifications'
 import { toUserMessage } from '@/utils/errors'
-import { formatDate, formatAmount } from '@/utils/format'
+import { formatDate, formatAmount, hasEnded } from '@/utils/format'
 import ProjectHero from '@/components/project/ProjectHero.vue'
 import TxConfirmDialog from '@/components/project/TxConfirmDialog.vue'
 import FundingCard from '@/components/project/FundingCard.vue'
@@ -63,14 +71,21 @@ const notifications = useNotificationStore()
 const myVotes = ref<Record<number, 'approve' | 'reject'>>({})
 const mySetupVote = ref<'approve' | 'reject' | null>(null)
 
-// ── Confirmation overlay for on-chain owner/validator actions ────────────────
-// Votes AND payouts all cost gas, so each goes through one shared checkout
-// overlay showing the gas estimate before signing.
+// This account's refund position on a FAILED project (donor's contribution +
+// reclaimable share), hydrated from chain in load(). null when not applicable.
+const myRefund = ref<RefundInfo | null>(null)
+
+// ── Confirmation overlay for on-chain owner/validator/donor actions ──────────
+// Votes, payouts, refunds and the mark-as-failed transitions all cost gas, so
+// each goes through one shared checkout overlay showing the gas estimate first.
 type PendingTx =
   | { kind: 'vote-setup'; approve: boolean }
   | { kind: 'vote-milestone'; index: number; approve: boolean }
   | { kind: 'payout-milestone'; index: number }
   | { kind: 'payout-rest' }
+  | { kind: 'refund' }
+  | { kind: 'mark-failed-funding' }
+  | { kind: 'mark-failed-voting' }
 
 const pendingTx = ref<PendingTx | null>(null)
 const txConfirmOpen = ref(false)
@@ -78,7 +93,7 @@ const txEstimating = ref(false)
 const txEstimate = ref<TxGasEstimate | null>(null)
 const txEstimateError = ref<string | null>(null)
 const txSubmitting = ref(false)
-// The amount the owner will receive on a payout (info row); null for votes.
+// The amount credited to the caller on a payout/refund (info row); null otherwise.
 const txPayoutAmount = ref<string | null>(null)
 
 // Which milestone the owner may pay next: Payout phase, current index, previous
@@ -97,7 +112,32 @@ const projectClosed = computed(
   () => !!project.value && project.value.contractStatus === 'Closed',
 )
 
-// Per-target in-flight flags the cards/buttons read for their loading state.
+// ── Failure & refund state ───────────────────────────────────────────────────
+const projectFailed = computed(() => !!project.value && project.value.contractStatus === 'Failed')
+// Donor can reclaim while failed and their balance is still unclaimed.
+const canRefund = computed(
+  () => projectFailed.value && !!myRefund.value && myRefund.value.donated !== '0',
+)
+const alreadyRefunded = computed(
+  () => projectFailed.value && !!myRefund.value && myRefund.value.donated === '0',
+)
+// Failable-but-not-yet-failed states anyone may flip so refunds unlock: the
+// funding period ended below goal, or a vote deadline passed while awaiting one.
+const canMarkFailedFunding = computed(
+  () =>
+    !!project.value &&
+    project.value.contractStatus === 'Funding' &&
+    project.value.status === 'abgelaufen',
+)
+const canMarkFailedVoting = computed(() => {
+  const p = project.value
+  if (!p) return false
+  if (p.contractStatus !== 'ToBeApproved' && p.contractStatus !== 'Payout') return false
+  return p.votingDeadline > 0 && hasEnded(p.votingDeadline)
+})
+const canMarkFailed = computed(() => canMarkFailedFunding.value || canMarkFailedVoting.value)
+
+// Per-target in-flight flags the cards/buttons/panels read for their loading state.
 const votingMilestoneIndex = computed(() =>
   txSubmitting.value && pendingTx.value?.kind === 'vote-milestone' ? pendingTx.value.index : null,
 )
@@ -110,27 +150,89 @@ const setupVoteSubmitting = computed(
 const payoutRestSubmitting = computed(
   () => txSubmitting.value && pendingTx.value?.kind === 'payout-rest',
 )
+const refundSubmitting = computed(() => txSubmitting.value && pendingTx.value?.kind === 'refund')
+const markFailedSubmitting = computed(
+  () =>
+    txSubmitting.value &&
+    (pendingTx.value?.kind === 'mark-failed-funding' ||
+      pendingTx.value?.kind === 'mark-failed-voting'),
+)
 
 // Overlay display, derived from the pending action.
-const isPayout = computed(
-  () => pendingTx.value?.kind === 'payout-milestone' || pendingTx.value?.kind === 'payout-rest',
-)
-const txConfirmTitle = computed(() =>
-  isPayout.value ? 'Auszahlung bestätigen' : 'Abstimmung bestätigen',
-)
+function txErrorTitle(kind: PendingTx['kind']): string {
+  switch (kind) {
+    case 'payout-milestone':
+    case 'payout-rest':
+      return 'Auszahlung fehlgeschlagen'
+    case 'refund':
+      return 'Rückzahlung fehlgeschlagen'
+    case 'mark-failed-funding':
+    case 'mark-failed-voting':
+      return 'Aktion fehlgeschlagen'
+    default:
+      return 'Abstimmung fehlgeschlagen'
+  }
+}
+const txConfirmTitle = computed(() => {
+  switch (pendingTx.value?.kind) {
+    case 'payout-milestone':
+    case 'payout-rest':
+      return 'Auszahlung bestätigen'
+    case 'refund':
+      return 'Rückzahlung bestätigen'
+    case 'mark-failed-funding':
+    case 'mark-failed-voting':
+      return 'Projekt als gescheitert markieren'
+    default:
+      return 'Abstimmung bestätigen'
+  }
+})
 const txConfirmLabel = computed(() => {
   const pt = pendingTx.value
-  if (pt?.kind === 'vote-setup' || pt?.kind === 'vote-milestone') {
-    return pt.approve ? 'Zustimmen' : 'Ablehnen'
+  switch (pt?.kind) {
+    case 'vote-setup':
+    case 'vote-milestone':
+      return pt.approve ? 'Zustimmen' : 'Ablehnen'
+    case 'payout-milestone':
+    case 'payout-rest':
+      return 'Auszahlen'
+    case 'refund':
+      return 'Zurückfordern'
+    case 'mark-failed-funding':
+    case 'mark-failed-voting':
+      return 'Als gescheitert markieren'
+    default:
+      return 'Bestätigen'
   }
-  return 'Auszahlen'
 })
-const txSubmittingLabel = computed(() => (isPayout.value ? 'Zahle aus …' : 'Stimme ab …'))
-const txConfirmHint = computed(() =>
-  isPayout.value
-    ? 'Bei der Auszahlung zahlst du nur die Netzwerkgebühr (Gas); der freigegebene Betrag wird dir gutgeschrieben. Die tatsächlichen Kosten können niedriger ausfallen.'
-    : 'Für diese Abstimmung fällt nur die Netzwerkgebühr (Gas) an – es wird kein Betrag überwiesen. Die tatsächlichen Kosten können niedriger ausfallen.',
-)
+const txSubmittingLabel = computed(() => {
+  switch (pendingTx.value?.kind) {
+    case 'payout-milestone':
+    case 'payout-rest':
+      return 'Zahle aus …'
+    case 'refund':
+      return 'Fordere an …'
+    case 'mark-failed-funding':
+    case 'mark-failed-voting':
+      return 'Markiere …'
+    default:
+      return 'Stimme ab …'
+  }
+})
+const txConfirmHint = computed(() => {
+  switch (pendingTx.value?.kind) {
+    case 'payout-milestone':
+    case 'payout-rest':
+      return 'Bei der Auszahlung zahlst du nur die Netzwerkgebühr (Gas); der freigegebene Betrag wird dir gutgeschrieben. Die tatsächlichen Kosten können niedriger ausfallen.'
+    case 'refund':
+      return 'Du zahlst nur die Netzwerkgebühr (Gas); deine anteilige Rückzahlung wird dir gutgeschrieben. Die tatsächlichen Kosten können niedriger ausfallen.'
+    case 'mark-failed-funding':
+    case 'mark-failed-voting':
+      return 'Damit wird das Projekt als gescheitert markiert und Rückzahlungen an die Spender werden freigeschaltet. Es fällt nur die Netzwerkgebühr (Gas) an.'
+    default:
+      return 'Für diese Abstimmung fällt nur die Netzwerkgebühr (Gas) an – es wird kein Betrag überwiesen. Die tatsächlichen Kosten können niedriger ausfallen.'
+  }
+})
 const txConfirmRows = computed<{ label: string; value: string }[]>(() => {
   const pt = pendingTx.value
   if (!pt) return []
@@ -150,6 +252,17 @@ const txConfirmRows = computed<{ label: string; value: string }[]>(() => {
       }
       return rows
     }
+    case 'refund': {
+      const rows = [{ label: 'Grund', value: 'Projekt gescheitert' }]
+      if (myRefund.value) {
+        rows.push({ label: 'Rückzahlung an dich', value: `${myRefund.value.refundable} ${currency}` })
+      }
+      return rows
+    }
+    case 'mark-failed-funding':
+      return [{ label: 'Aktion', value: 'Als gescheitert markieren (Ziel nicht erreicht)' }]
+    case 'mark-failed-voting':
+      return [{ label: 'Aktion', value: 'Als gescheitert markieren (Frist abgelaufen)' }]
   }
   return []
 })
@@ -161,7 +274,7 @@ async function openTxConfirm(pt: PendingTx) {
   pendingTx.value = pt
   txEstimate.value = null
   txEstimateError.value = null
-  // Show what the owner receives (milestone amount is already known locally).
+  // Show what the caller receives, when known locally (milestone amount / refund).
   txPayoutAmount.value =
     pt.kind === 'payout-milestone'
       ? formatAmount(project.value.milestones[pt.index]?.allocated ?? 0)
@@ -184,6 +297,15 @@ async function openTxConfirm(pt: PendingTx) {
         break
       case 'payout-rest':
         txEstimate.value = await estimatePayoutRestGas(addr)
+        break
+      case 'refund':
+        txEstimate.value = await estimateRefundGas(addr)
+        break
+      case 'mark-failed-funding':
+        txEstimate.value = await estimateMarkAsFailedFundingGas(addr)
+        break
+      case 'mark-failed-voting':
+        txEstimate.value = await estimateMarkAsFailedExpiredVotingGas(addr)
         break
     }
   } catch (e) {
@@ -211,7 +333,6 @@ async function confirmTx() {
   const pt = pendingTx.value
   if (!project.value || !pt || txSubmitting.value) return
   const addr = project.value.contract.address
-  const payout = isPayout.value
   txSubmitting.value = true
   try {
     let message = ''
@@ -234,13 +355,25 @@ async function confirmTx() {
         await payoutRest(addr)
         message = 'Die restlichen Mittel wurden ausgezahlt.'
         break
+      case 'refund':
+        await refund(addr)
+        message = 'Deine Rückzahlung wurde veranlasst.'
+        break
+      case 'mark-failed-funding':
+        await markAsFailedFunding(addr)
+        message = 'Das Projekt wurde als gescheitert markiert.'
+        break
+      case 'mark-failed-voting':
+        await markAsFailedDueToExpiredVoting(addr)
+        message = 'Das Projekt wurde als gescheitert markiert.'
+        break
     }
-    // Re-read: a vote/payout can unlock the next payout, close, or fail the project.
+    // Re-read: any of these can change the lifecycle (unlock payout, close, fail).
     await load()
     notifications.success(message)
     closeTxConfirm()
   } catch (e) {
-    notifications.error(toUserMessage(e), payout ? 'Auszahlung fehlgeschlagen' : 'Abstimmung fehlgeschlagen')
+    notifications.error(toUserMessage(e), txErrorTitle(pt.kind))
   } finally {
     txSubmitting.value = false
   }
@@ -255,6 +388,13 @@ function onPayout(index: number) {
 }
 function onPayoutRest() {
   openTxConfirm({ kind: 'payout-rest' })
+}
+function onRefund() {
+  openTxConfirm({ kind: 'refund' })
+}
+function onMarkFailed() {
+  if (canMarkFailedFunding.value) openTxConfirm({ kind: 'mark-failed-funding' })
+  else if (canMarkFailedVoting.value) openTxConfirm({ kind: 'mark-failed-voting' })
 }
 
 // Validator: approve/reject the PROJECT SETUP while the campaign is in
@@ -319,6 +459,23 @@ async function load() {
       mySetupVote.value = null
       myVotes.value = {}
     }
+    // On a FAILED project, load THIS donor's reclaimable share so the refund
+    // panel can show it (non-fatal — the page still renders without it).
+    if (
+      p &&
+      p.contractStatus === 'Failed' &&
+      wallet.address &&
+      wallet.roleInProject(p.contract.address).isDonor
+    ) {
+      try {
+        myRefund.value = await getRefundInfo(p.contract.address, wallet.address)
+      } catch (e) {
+        console.error('Fehler beim Laden der Rückzahlungsdaten:', e)
+        myRefund.value = null
+      }
+    } else {
+      myRefund.value = null
+    }
   } finally {
     loading.value = false
   }
@@ -332,6 +489,7 @@ function enterProject() {
   activeTab.value = 'beschreibung'
   myVotes.value = {}
   mySetupVote.value = null
+  myRefund.value = null
   closeTxConfirm()
   newsOpen.value = false
   resetNewsForm()
@@ -464,6 +622,72 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
     <template v-else-if="project">
       <div class="detail__hero-wrap">
         <ProjectHero :project="project" @donated="onDonated" />
+      </div>
+
+      <!-- Failure & refund: shown when the project failed (donors reclaim their
+           share) or is failable-but-not-yet-failed (anyone can flip it). -->
+      <div v-if="projectFailed || canMarkFailed" class="detail__failure-wrap">
+        <section class="failure">
+          <div class="failure__head">
+            <AppIcon name="circle-alert" :size="18" />
+            <h2 class="failure__title">
+              {{
+                projectFailed
+                  ? 'Projekt gescheitert'
+                  : canMarkFailedFunding
+                    ? 'Finanzierung nicht erreicht'
+                    : 'Abstimmungsfrist abgelaufen'
+              }}
+            </h2>
+          </div>
+
+          <!-- Already failed → donors reclaim their proportional share. -->
+          <template v-if="projectFailed">
+            <p class="failure__text">
+              Dieses Projekt wurde als gescheitert markiert. Spenderinnen und Spender können ihren
+              anteiligen Beitrag zurückfordern.
+            </p>
+            <div v-if="canRefund && myRefund" class="failure__refund">
+              <div class="failure__amounts">
+                <span>Dein Beitrag: <strong>{{ myRefund.donated }} {{ project.currency }}</strong></span>
+                <span>Deine Rückzahlung: <strong>{{ myRefund.refundable }} {{ project.currency }}</strong></span>
+              </div>
+              <button
+                type="button"
+                class="failure__btn"
+                :disabled="refundSubmitting"
+                @click="onRefund"
+              >
+                {{ refundSubmitting ? 'Fordere an …' : 'Rückzahlung anfordern' }}
+              </button>
+            </div>
+            <p v-else-if="alreadyRefunded" class="failure__note">
+              <AppIcon name="circle-check" :size="14" /> Du hast deine Rückzahlung bereits erhalten.
+            </p>
+          </template>
+
+          <!-- Not yet failed → anyone connected may flip it so refunds unlock. -->
+          <template v-else>
+            <p class="failure__text">
+              {{
+                canMarkFailedFunding
+                  ? 'Die Finanzierungsphase ist beendet und das Ziel wurde nicht erreicht.'
+                  : 'Die Frist für die Validator-Abstimmung ist abgelaufen.'
+              }}
+              Markiere das Projekt als gescheitert, um Rückzahlungen an die Spender freizuschalten.
+            </p>
+            <button
+              v-if="wallet.isConnected"
+              type="button"
+              class="failure__btn"
+              :disabled="markFailedSubmitting"
+              @click="onMarkFailed"
+            >
+              {{ markFailedSubmitting ? 'Markiere …' : 'Als gescheitert markieren' }}
+            </button>
+            <p v-else class="failure__note">Zum Fortfahren bitte oben mit einer Wallet einloggen.</p>
+          </template>
+        </section>
       </div>
 
       <div class="detail__content">
@@ -779,6 +1003,94 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
 
 .detail__hero-wrap {
   padding: 0 var(--bd-page-gutter) 32px;
+}
+
+/* Failure & refund banner */
+.detail__failure-wrap {
+  padding: 0 var(--bd-page-gutter) 32px;
+}
+
+.failure {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 24px;
+  background: var(--bd-amber-tint);
+  border: 1px solid var(--bd-amber);
+  border-radius: var(--bd-radius-md);
+}
+
+.failure__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--bd-amber);
+}
+
+.failure__title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--bd-black);
+}
+
+.failure__text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--bd-grey-text);
+  max-width: 720px;
+}
+
+.failure__refund {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--bd-surface);
+  border: 1px solid var(--bd-stroke);
+  border-radius: var(--bd-radius-sm);
+}
+
+.failure__amounts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+  color: var(--bd-grey-text);
+}
+
+.failure__amounts strong {
+  color: var(--bd-black);
+}
+
+.failure__btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: var(--bd-radius-sm);
+  background: var(--bd-black);
+  color: var(--bd-surface);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.failure__btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.failure__note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--bd-grey-text);
 }
 
 .detail__back {

@@ -212,6 +212,8 @@ function mergeProject(c: ContractCampaign, m: ProjectMetadata): Project {
     status: deriveProjectStatus(c),
     contractStatus: c.currentStatus,
     currentMilestoneIndex: c.currentMilestoneIndex,
+    refundableBalance: c.refundableBalance,
+    votingDeadline: c.votingDeadline,
     projectSetup: {
       approvedCount: c.projectSetup?.approvedCount ?? 0,
       rejectedCount: c.projectSetup?.rejectedCount ?? 0,

@@ -112,6 +112,14 @@ const LEAVE_SETUP_OPEN_FOR = "gemeinschaftsgarten-lindenau";
 // (whose windows are ~weeks long). "" disables it.
 const MARK_FAILED_FUNDING_FOR = "open-air-kino-hinterhof";
 
+// Demo seam: the project id that FUNDS fully, has milestone 0 PAID, but is then
+// DECLINED by the validators (they reject milestone 0) — failing the project and
+// freezing refundableBalance for donor refunds. Demonstrates the refund flow
+// after a milestone rejection (vs. the funding-timeout failure above). It is
+// funded from a fixed donor set (below) that includes the "Beispiel-Spender"
+// persona, so that persona can reclaim its refund in the UI. "" disables it.
+const MARK_FAILED_MILESTONE_FOR = "lastenrad-kollektiv";
+
 console.log("Deploying DonationFactory from", deployer.address);
 const factory = await ethers.deployContract("DonationFactory", deployer);
 await factory.waitForDeployment();
@@ -173,8 +181,13 @@ for (let i = 0; i < contractData.campaigns.length; i++) {
   for (let c = 0; c < CHUNKS && remaining > 0n; c++) {
     const chunk = c === CHUNKS - 1 ? remaining : remaining / BigInt(CHUNKS - c);
     if (chunk <= 0n) continue;
-    const donor = donorPool[donorCursor % donorPool.length];
-    donorCursor++;
+    // The milestone-rejection demo is funded from a FIXED set (accounts #10–#13,
+    // incl. the "Beispiel-Spender" persona #10) so that persona can reclaim its
+    // refund in the UI. It does NOT advance the global donor cursor, so the
+    // documented donor→campaign mapping for every other campaign is unchanged.
+    const isRejectionDemo = meta.id === MARK_FAILED_MILESTONE_FOR;
+    const donor = isRejectionDemo ? signers[10 + c] : donorPool[donorCursor % donorPool.length];
+    if (!isRejectionDemo) donorCursor++;
     donorsUsed++;
     await (await donation.connect(donor).donate({ value: chunk })).wait();
     remaining -= chunk;
@@ -216,6 +229,34 @@ for (let i = 0; i < contractData.campaigns.length; i++) {
     return s;
   });
   console.log(`[${meta.id}] contract selected ${onchainValidators.length} validator(s)`);
+
+  // DEMO SEAM: this campaign funds fully and milestone 0 is PAID, but the
+  // validators then DECLINE milestone 0 — which fails the project and freezes
+  // refundableBalance for donor refunds. Demonstrates the refund flow after a
+  // milestone rejection (distinct from the funding-timeout failure below).
+  if (meta.id === MARK_FAILED_MILESTONE_FOR) {
+    // Approve the project setup so the payout phase opens.
+    for (const v of onchainValidators) {
+      if (Number(await donation.currentStatus()) !== StatusEnum.ToBeApproved) break;
+      await (await donation.connect(v).voteProjectSetup(true)).wait();
+    }
+    if (Number(await donation.currentStatus()) !== StatusEnum.Payout) {
+      throw new Error(`[${meta.id}] setup not approved — cannot demo a milestone rejection`);
+    }
+    // Pay milestone 0 (opens its vote), then have the validators REJECT it until
+    // the contract flips the project to Failed.
+    await (await donation.connect(owner).payout(0)).wait();
+    for (const v of onchainValidators) {
+      if (Number(await donation.currentStatus()) === StatusEnum.Failed) break;
+      await (await donation.connect(v).voteMilestone(0, false)).wait();
+    }
+    if (Number(await donation.currentStatus()) !== StatusEnum.Failed) {
+      throw new Error(`[${meta.id}] milestone 0 was not declined — expected Failed`);
+    }
+    console.log(`[${meta.id}] milestone 0 paid then DECLINED by validators -> Failed (refunds open)`);
+    results.push({ id: meta.id, address: donationAddress });
+    continue;
+  }
 
   // DEMO SEAM: leave this campaign in ToBeApproved with its project-setup vote
   // OPEN, so a validator can approve the project start from the UI. We pre-cast a

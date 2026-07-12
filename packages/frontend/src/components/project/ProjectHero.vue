@@ -38,14 +38,28 @@ const remaining = computed(() =>
   remainingAmountString(props.project.funding.goal, props.project.funding.raised),
 )
 
-// Fully funded: nothing left to raise (goal reached, computed in wei). Donations
-// are closed on-chain at this point, so the box switches to a green "finished"
-// state that every viewer sees — logged in or not.
-const funded = computed(() => props.project.funding.goal > 0 && remaining.value === '')
-
-const canFillRemaining = computed(
-  () => props.project.contractStatus === 'Funding' && remaining.value !== '',
+// The donation box has three mutually-exclusive states:
+//  • funded   — goal reached (and not failed): green "finished" box.
+//  • closed   — project failed, or the funding period ended below goal: donations
+//               are no longer possible (the refund/mark-failed actions live on
+//               the detail page, not here).
+//  • open     — Funding, still within time and below goal: the donate form.
+const failed = computed(() => props.project.contractStatus === 'Failed')
+const funded = computed(
+  () => !failed.value && props.project.funding.goal > 0 && remaining.value === '',
 )
+const fundingEnded = computed(
+  () => props.project.contractStatus === 'Funding' && props.project.status === 'abgelaufen',
+)
+const donationsClosed = computed(() => !funded.value && (failed.value || fundingEnded.value))
+const donationsOpen = computed(() => !funded.value && !donationsClosed.value)
+const closedMessage = computed(() =>
+  failed.value
+    ? 'Projekt gescheitert – Spenden sind nicht mehr möglich.'
+    : 'Finanzierungsphase beendet – Spenden sind nicht mehr möglich.',
+)
+
+const canFillRemaining = computed(() => donationsOpen.value && remaining.value !== '')
 
 function fillRemaining() {
   amount.value = remaining.value
@@ -137,50 +151,59 @@ function cancelDonate() {
       </div>
 
       <div class="hero__donate-wrap">
-        <!-- Fully funded → the box turns green and donations are closed, so
-             every viewer sees the project is finished. -->
+        <!-- Funded → green "finished" box; every viewer sees the goal is met. -->
+        <div v-if="funded" class="hero__donate hero__donate--funded">
+          <span class="hero__funded">
+            <AppIcon name="circle-check" :size="18" />
+            Ziel erreicht – vollständig finanziert
+          </span>
+          <button class="hero__submit" type="button" disabled>Finanziert</button>
+        </div>
+
+        <!-- Failed, or funding period ended below goal → donations closed. The
+             refund / mark-as-failed actions live in the detail page banner. -->
+        <div v-else-if="donationsClosed" class="hero__donate hero__donate--closed">
+          <span class="hero__closed">
+            <AppIcon name="circle-alert" :size="18" />
+            {{ closedMessage }}
+          </span>
+        </div>
+
+        <!-- Open → the donation form. -->
         <form
+          v-else
           class="hero__donate"
-          :class="{ 'hero__donate--error': error && !funded, 'hero__donate--funded': funded }"
+          :class="{ 'hero__donate--error': error }"
           @submit.prevent="onDonate"
         >
-          <template v-if="funded">
-            <span class="hero__funded">
-              <AppIcon name="circle-check" :size="18" />
-              Ziel erreicht – vollständig finanziert
-            </span>
-            <button class="hero__submit" type="button" disabled>Finanziert</button>
-          </template>
-          <template v-else>
-            <span class="hero__currency">{{ project.currency }}</span>
-            <!-- type="text", NOT "number": Vue auto-casts v-model on number inputs
-                 to a JS float, but the amount must stay a decimal STRING all the
-                 way to parseEther (see utils/amount.ts). inputmode keeps the
-                 numeric keyboard on mobile; validateAmount rejects bad input. -->
-            <input
-              v-model="amount"
-              class="hero__input"
-              type="text"
-              inputmode="decimal"
-              placeholder="Betrag eingeben"
-              aria-label="Spendenbetrag"
-              :aria-invalid="error ? 'true' : undefined"
-            />
-            <button
-              v-if="canFillRemaining"
-              class="hero__rest"
-              type="button"
-              :title="`Restbetrag einsetzen: ${remaining} ${project.currency}`"
-              @click="fillRemaining"
-            >
-              Restbetrag
-            </button>
-            <button class="hero__submit" type="submit" :disabled="submitting">
-              {{ submitting ? 'Sende …' : 'Jetzt unterstützen' }}
-            </button>
-          </template>
+          <span class="hero__currency">{{ project.currency }}</span>
+          <!-- type="text", NOT "number": Vue auto-casts v-model on number inputs
+               to a JS float, but the amount must stay a decimal STRING all the
+               way to parseEther (see utils/amount.ts). inputmode keeps the
+               numeric keyboard on mobile; validateAmount rejects bad input. -->
+          <input
+            v-model="amount"
+            class="hero__input"
+            type="text"
+            inputmode="decimal"
+            placeholder="Betrag eingeben"
+            aria-label="Spendenbetrag"
+            :aria-invalid="error ? 'true' : undefined"
+          />
+          <button
+            v-if="canFillRemaining"
+            class="hero__rest"
+            type="button"
+            :title="`Restbetrag einsetzen: ${remaining} ${project.currency}`"
+            @click="fillRemaining"
+          >
+            Restbetrag
+          </button>
+          <button class="hero__submit" type="submit" :disabled="submitting">
+            {{ submitting ? 'Sende …' : 'Jetzt unterstützen' }}
+          </button>
         </form>
-        <p v-if="error && !funded" class="hero__error" role="alert">{{ error }}</p>
+        <p v-if="error && donationsOpen" class="hero__error" role="alert">{{ error }}</p>
       </div>
 
       <TxConfirmDialog
@@ -369,6 +392,26 @@ function cancelDonate() {
   font-size: 14px;
   font-weight: 700;
   color: var(--bd-green);
+}
+
+/* Donations closed (failed / funding period ended) — flexible height so the
+   message can wrap on narrow widths. */
+.hero__donate--closed {
+  height: auto;
+  min-height: 42px;
+  padding: 10px 14px;
+  border-color: var(--bd-amber);
+  background: var(--bd-amber-tint);
+}
+
+.hero__closed {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--bd-amber);
 }
 
 .hero__error {
