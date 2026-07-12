@@ -107,6 +107,8 @@ async function confirmDonate() {
     const result = await donate(props.project.id, pendingAmount.value)
     // Authoritative post-confirmation funding from the service (no client math).
     emit('donated', result.funding)
+    // The donation reduced the wallet's balance — refresh the navbar chip.
+    void wallet.refreshBalance()
     notifications.success(
       `Vielen Dank! Deine Spende von ${pendingAmount.value} ${props.project.currency} wurde übernommen.`,
     )

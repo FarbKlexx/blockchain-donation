@@ -954,6 +954,13 @@ export async function getRemainingBalance(projectAddress: string): Promise<strin
   return trimTrailingZeros(ethers.formatEther(await contract.getContractBalance()))
 }
 
+/** The connected account's on-chain native-coin balance (e.g. ETH), as a number.
+ *  Read-only (no signer needed) — shown next to the account chip in the navbar. */
+export async function getWalletBalance(account: string): Promise<number> {
+  const provider = getReadProvider()
+  return Number(ethers.formatEther(await provider.getBalance(account)))
+}
+
 // ── Failure & refunds (donor payback) ────────────────────────────────────────
 
 export interface RefundInfo {

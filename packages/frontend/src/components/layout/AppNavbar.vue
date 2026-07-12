@@ -6,6 +6,8 @@ import AppIcon from '@/components/ui/AppIcon.vue'
 import LoginDialog from '@/components/auth/LoginDialog.vue'
 import { useWalletStore } from '@/stores/wallet'
 import { shortenAddress } from '@/utils/address'
+import { formatAmount } from '@/utils/format'
+import { NATIVE_CURRENCY } from '@/utils/amount'
 
 // Wallet login + the connected account menu. Roles drive what the menu shows;
 // see stores/wallet.ts (roles are presentation-only, derived from chain).
@@ -15,6 +17,11 @@ const route = useRoute()
 // Two top-level sections share this navbar: the donation projects and the
 // (independent) coupon subsystem. The coupon section owns every /gutschein* path.
 const onCoupons = computed(() => route.path.startsWith('/gutschein'))
+
+// The connected wallet's native-coin balance, shown next to the address chip.
+const balanceLabel = computed(() =>
+  wallet.balance != null ? `${formatAmount(wallet.balance)} ${NATIVE_CURRENCY}` : null,
+)
 
 const dialogOpen = ref(false)
 const menuOpen = ref(false)
@@ -69,8 +76,11 @@ onUnmounted(() => window.removeEventListener('click', closeMenu))
       {{ wallet.connecting ? 'Verbinde …' : 'Einloggen mit Wallet' }}
     </button>
 
-    <!-- Connected: address chip toggles a role-aware menu. -->
+    <!-- Connected: balance + address chip that toggles a role-aware menu. -->
     <div v-else class="navbar__account" @click.stop>
+      <span v-if="balanceLabel" class="navbar__balance" title="Guthaben deiner Wallet">
+        {{ balanceLabel }}
+      </span>
       <button
         class="navbar__wallet navbar__wallet--connected"
         :aria-expanded="menuOpen"
@@ -204,6 +214,29 @@ onUnmounted(() => window.removeEventListener('click', closeMenu))
 
 .navbar__account {
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* On-chain balance of the connected wallet, left of the address chip. */
+.navbar__balance {
+  padding: 12px 14px;
+  border: 1px solid var(--bd-stroke);
+  border-radius: var(--bd-radius-sm);
+  background: var(--bd-surface);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--bd-black);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 560px) {
+  /* Keep the address chip; the balance is secondary on very narrow screens. */
+  .navbar__balance {
+    display: none;
+  }
 }
 
 .menu {

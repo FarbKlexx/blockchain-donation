@@ -370,6 +370,8 @@ async function confirmTx() {
     }
     // Re-read: any of these can change the lifecycle (unlock payout, close, fail).
     await load()
+    // Votes/payouts/refunds all move the caller's balance — refresh the chip.
+    void wallet.refreshBalance()
     notifications.success(message)
     closeTxConfirm()
   } catch (e) {
