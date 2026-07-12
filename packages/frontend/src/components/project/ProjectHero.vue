@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import type { Funding, Project } from '@/types/project'
-import { donate, estimateDonationGas, type DonationGasEstimate } from '@/services/projectsService'
+import { donate, estimateDonationGas, type TxGasEstimate } from '@/services/projectsService'
 import { decimalsFor, validateAmount, remainingAmountString } from '@/utils/amount'
 import { mediaUrl } from '@/utils/media'
 import { useWalletStore } from '@/stores/wallet'
 import { useNotificationStore } from '@/stores/notifications'
 import { toUserMessage } from '@/utils/errors'
 import AppIcon from '@/components/ui/AppIcon.vue'
-import DonationConfirmDialog from '@/components/project/DonationConfirmDialog.vue'
+import TxConfirmDialog from '@/components/project/TxConfirmDialog.vue'
 
 const props = defineProps<{ project: Project }>()
 const emit = defineEmits<{ donated: [funding: Funding] }>()
@@ -25,7 +25,7 @@ const error = ref<string | null>(null)
 // breakdown (amount + estimated gas) and only sends the tx once confirmed.
 const confirmOpen = ref(false)
 const estimating = ref(false)
-const estimate = ref<DonationGasEstimate | null>(null)
+const estimate = ref<TxGasEstimate | null>(null)
 const estimateError = ref<string | null>(null)
 const pendingAmount = ref('')
 
@@ -183,11 +183,16 @@ function cancelDonate() {
         <p v-if="error && !funded" class="hero__error" role="alert">{{ error }}</p>
       </div>
 
-      <DonationConfirmDialog
+      <TxConfirmDialog
         :open="confirmOpen"
-        :project-title="project.title"
+        title="Spende bestätigen"
+        :summary="project.title"
+        :rows="[{ label: 'Spendenbetrag', value: `${pendingAmount} ${project.currency}` }]"
+        total-label="Gesamt (max.)"
         :currency="project.currency"
-        :amount="pendingAmount"
+        hint="Betrag zzgl. maximaler Netzwerkgebühr. Die tatsächlichen Gaskosten können niedriger ausfallen; die Gebühr geht an das Netzwerk, nicht an das Projekt."
+        confirm-label="Jetzt spenden"
+        submitting-label="Sende …"
         :estimate="estimate"
         :estimating="estimating"
         :estimate-error="estimateError"

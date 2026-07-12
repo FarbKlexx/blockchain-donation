@@ -2,12 +2,23 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { Funding, Project } from '@/types/project'
-import { getProject, voteOnMilestone, payoutMilestone, voteProjectSetup, createProjectNews, getMyProjectVotes } from '@/services/projectsService'
+import {
+  getProject,
+  voteOnMilestone,
+  payoutMilestone,
+  voteProjectSetup,
+  createProjectNews,
+  getMyProjectVotes,
+  estimateVoteMilestoneGas,
+  estimateVoteSetupGas,
+  type TxGasEstimate,
+} from '@/services/projectsService'
 import { useWalletStore } from '@/stores/wallet'
 import { useNotificationStore } from '@/stores/notifications'
 import { toUserMessage } from '@/utils/errors'
 import { formatDate } from '@/utils/format'
 import ProjectHero from '@/components/project/ProjectHero.vue'
+import TxConfirmDialog from '@/components/project/TxConfirmDialog.vue'
 import FundingCard from '@/components/project/FundingCard.vue'
 import SmartContractCard from '@/components/project/SmartContractCard.vue'
 import ValidatorsCard from '@/components/project/ValidatorsCard.vue'
@@ -42,27 +53,110 @@ const isValidator = computed(
 
 const notifications = useNotificationStore()
 
-// This account's current votes, keyed by milestone position — hydrated from chain
-// in load() (so they survive reloads) and set optimistically after a vote. The
-// authoritative confirmations come from the chain re-read on load() after the tx.
+// This account's current votes, hydrated from chain in load() (so they survive
+// reloads) and set optimistically after a vote. mySetupVote is the project-setup
+// equivalent. The authoritative counts come from the chain re-read on load().
 const myVotes = ref<Record<number, 'approve' | 'reject'>>({})
-const votingIndex = ref<number | null>(null)
+const mySetupVote = ref<'approve' | 'reject' | null>(null)
 
-async function onVote(index: number, approve: boolean) {
-  if (!project.value || votingIndex.value !== null) return
-  votingIndex.value = index
+// ── Vote confirmation (checkout overlay) ─────────────────────────────────────
+// Validator votes are on-chain txs that cost gas, so — like donating — they go
+// through a confirmation overlay showing the gas estimate before signing. One
+// overlay serves both the project-setup vote and milestone votes.
+type PendingVote =
+  | { kind: 'setup'; approve: boolean }
+  | { kind: 'milestone'; index: number; approve: boolean }
+
+const pendingVote = ref<PendingVote | null>(null)
+const voteConfirmOpen = ref(false)
+const voteEstimating = ref(false)
+const voteEstimate = ref<TxGasEstimate | null>(null)
+const voteEstimateError = ref<string | null>(null)
+const voteSubmitting = ref(false)
+
+// Per-target in-flight flags the cards/buttons read for their loading state.
+const votingMilestoneIndex = computed(() =>
+  voteSubmitting.value && pendingVote.value?.kind === 'milestone' ? pendingVote.value.index : null,
+)
+const setupVoteSubmitting = computed(
+  () => voteSubmitting.value && pendingVote.value?.kind === 'setup',
+)
+
+// Overlay display: the action being confirmed + the confirm-button label.
+const voteConfirmRows = computed(() => {
+  const pv = pendingVote.value
+  if (!pv) return []
+  const target =
+    pv.kind === 'setup' ? 'Projektstart' : `Meilenstein ${String(pv.index + 1).padStart(2, '0')}`
+  return [{ label: 'Abstimmung', value: `${target} · ${pv.approve ? 'Zustimmen' : 'Ablehnen'}` }]
+})
+const voteConfirmLabel = computed(() => (pendingVote.value?.approve ? 'Zustimmen' : 'Ablehnen'))
+
+// A vote button → open the confirmation overlay and estimate the gas (no tx yet).
+async function openVoteConfirm(pv: PendingVote) {
+  if (!project.value || voteSubmitting.value) return
+  pendingVote.value = pv
+  voteEstimate.value = null
+  voteEstimateError.value = null
+  voteConfirmOpen.value = true
+  voteEstimating.value = true
   try {
-    await voteOnMilestone(project.value.contract.address, index, approve)
-    myVotes.value[index] = approve ? 'approve' : 'reject'
-    // Re-read: an approval can unlock the next payout or close the project.
-    await load()
-    notifications.success('Deine Stimme wurde gezählt.')
+    const addr = project.value.contract.address
+    voteEstimate.value =
+      pv.kind === 'setup'
+        ? await estimateVoteSetupGas(addr, pv.approve)
+        : await estimateVoteMilestoneGas(addr, pv.index, pv.approve)
   } catch (e) {
-    // Failures (local-signer guard, contract revert) → a readable toast.
+    voteEstimateError.value = toUserMessage(e, 'Die Gaskosten konnten nicht geschätzt werden.')
+  } finally {
+    voteEstimating.value = false
+  }
+}
+
+function closeVoteConfirm() {
+  voteConfirmOpen.value = false
+  pendingVote.value = null
+  voteEstimate.value = null
+  voteEstimateError.value = null
+}
+
+function cancelVote() {
+  if (voteSubmitting.value) return
+  closeVoteConfirm()
+}
+
+// Confirmed in the overlay → sign and send the vote (setup or milestone).
+async function confirmVote() {
+  const pv = pendingVote.value
+  if (!project.value || !pv || voteSubmitting.value) return
+  voteSubmitting.value = true
+  try {
+    const addr = project.value.contract.address
+    if (pv.kind === 'setup') {
+      await voteProjectSetup(addr, pv.approve)
+      mySetupVote.value = pv.approve ? 'approve' : 'reject'
+    } else {
+      await voteOnMilestone(addr, pv.index, pv.approve)
+      myVotes.value[pv.index] = pv.approve ? 'approve' : 'reject'
+    }
+    // Re-read: a decisive vote can unlock the next payout, close, or fail the project.
+    await load()
+    notifications.success(
+      pv.kind === 'setup'
+        ? 'Deine Stimme zum Projektstart wurde gezählt.'
+        : 'Deine Stimme wurde gezählt.',
+    )
+    closeVoteConfirm()
+  } catch (e) {
     notifications.error(toUserMessage(e), 'Abstimmung fehlgeschlagen')
   } finally {
-    votingIndex.value = null
+    voteSubmitting.value = false
   }
+}
+
+// Milestone vote button → open the confirmation overlay.
+function onVote(index: number, approve: boolean) {
+  openVoteConfirm({ kind: 'milestone', index, approve })
 }
 
 // Owner: pay out the next milestone. The milestone the owner may pay is
@@ -97,8 +191,6 @@ async function onPayout(index: number) {
 
 // Validator: approve/reject the PROJECT SETUP while the campaign is in
 // ToBeApproved (the one-time vote that must pass before any milestone is paid).
-const mySetupVote = ref<'approve' | 'reject' | null>(null)
-const setupVoting = ref(false)
 
 // Show the setup-vote panel only while the vote is actually open on-chain.
 const setupVoteOpen = computed(
@@ -108,20 +200,9 @@ const setupVoteOpen = computed(
 // contract only rejects re-submitting the identical choice.
 const canVoteSetup = computed(() => setupVoteOpen.value && isValidator.value)
 
-async function onVoteSetup(approve: boolean) {
-  if (!project.value || setupVoting.value) return
-  setupVoting.value = true
-  try {
-    await voteProjectSetup(project.value.contract.address, approve)
-    mySetupVote.value = approve ? 'approve' : 'reject'
-    // A decisive vote flips the project to Payout (or Failed) — re-read.
-    await load()
-    notifications.success('Deine Stimme zum Projektstart wurde gezählt.')
-  } catch (e) {
-    notifications.error(toUserMessage(e), 'Abstimmung fehlgeschlagen')
-  } finally {
-    setupVoting.value = false
-  }
+// Setup vote button → open the confirmation overlay.
+function onVoteSetup(approve: boolean) {
+  openVoteConfirm({ kind: 'setup', approve })
 }
 
 // Lifecycle gate (Spende → Stimme → Auszahlung): validators may only vote on
@@ -183,6 +264,7 @@ function enterProject() {
   activeTab.value = 'beschreibung'
   myVotes.value = {}
   mySetupVote.value = null
+  closeVoteConfirm()
   newsOpen.value = false
   resetNewsForm()
   load()
@@ -395,7 +477,7 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
                     type="button"
                     class="setup__btn setup__btn--yes"
                     :class="{ 'setup__btn--current': mySetupVote === 'approve' }"
-                    :disabled="setupVoting || mySetupVote === 'approve'"
+                    :disabled="setupVoteSubmitting || mySetupVote === 'approve'"
                     @click="onVoteSetup(true)"
                   >
                     <AppIcon name="check" :size="14" />
@@ -405,7 +487,7 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
                     type="button"
                     class="setup__btn setup__btn--no"
                     :class="{ 'setup__btn--current': mySetupVote === 'reject' }"
-                    :disabled="setupVoting || mySetupVote === 'reject'"
+                    :disabled="setupVoteSubmitting || mySetupVote === 'reject'"
                     @click="onVoteSetup(false)"
                   >
                     {{ mySetupVote === 'reject' ? 'Abgelehnt' : 'Ablehnen' }}
@@ -428,7 +510,7 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
                 :voting-open="goalReached"
                 :can-vote="isValidator && m.status === 'in_progress'"
                 :my-vote="myVotes[i] ?? null"
-                :voting="votingIndex === i"
+                :voting="votingMilestoneIndex === i"
                 :can-payout="isOwner && i === payableIndex"
                 :paying-out="payingOut && i === payableIndex"
                 @vote="onVote(i, $event)"
@@ -543,6 +625,25 @@ onUnmounted(() => window.removeEventListener('resize', updateIndicator))
           <ValidatorsCard :validators="project.validators" />
         </aside>
       </div>
+
+      <!-- Checkout overlay for validator votes (gas-only, no value transfer). -->
+      <TxConfirmDialog
+        :open="voteConfirmOpen"
+        title="Abstimmung bestätigen"
+        :summary="project.title"
+        :rows="voteConfirmRows"
+        total-label="Netzwerkgebühr (max.)"
+        :currency="project.currency"
+        hint="Für diese Abstimmung fällt nur die Netzwerkgebühr (Gas) an – es wird kein Betrag überwiesen. Die tatsächlichen Kosten können niedriger ausfallen."
+        :confirm-label="voteConfirmLabel"
+        submitting-label="Stimme ab …"
+        :estimate="voteEstimate"
+        :estimating="voteEstimating"
+        :estimate-error="voteEstimateError"
+        :submitting="voteSubmitting"
+        @confirm="confirmVote"
+        @cancel="cancelVote"
+      />
     </template>
 
     <div v-else class="detail__state">

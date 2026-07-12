@@ -617,12 +617,12 @@ function assertLocalSigner(): void {
   }
 }
 
-/** A full, display-ready breakdown of what a donation will cost — the amount,
- *  the estimated network (gas) fee, and their sum. All fields are formatted
- *  strings in the native coin (except `gasPriceGwei`, in Gwei). Shown in the
- *  checkout overlay BEFORE the user confirms. */
-export interface DonationGasEstimate {
-  /** The donation amount (native coin), e.g. "0.05". */
+/** A full, display-ready breakdown of what a transaction will cost — any value
+ *  it transfers (0 for non-payable calls like votes) plus the estimated network
+ *  (gas) fee, and their sum. Strings are formatted in the native coin, except
+ *  `gasPriceGwei` (Gwei). Shown in the checkout overlay BEFORE the user signs. */
+export interface TxGasEstimate {
+  /** Value transferred with the tx (native coin), "0" for non-payable calls. */
   amount: string
   /** Estimated gas units the tx will consume, grouped for display, e.g. "68.912". */
   gasUnits: string
@@ -636,29 +636,18 @@ export interface DonationGasEstimate {
 }
 
 /**
- * Estimate the full cost of a donation WITHOUT sending it — used by the checkout
- * overlay. Runs the same `donate()` call through `estimateGas` (a real EVM
- * simulation, so preconditions like the funding phase are checked and the gas
- * figure is accurate) and multiplies by the current gas price. Uses the same
- * signer/RPC as the real donation, so the estimate matches what will be sent.
- * Throws (with a revert reason) if the donation itself would fail.
+ * Turn a gas-units estimator + the current fee data into a display-ready cost
+ * breakdown. `estimateGasUnits` runs a real EVM simulation of the exact call
+ * (so contract preconditions are checked and the figure is accurate), and
+ * throws with a revert reason if the call itself would fail. `valueWei` is any
+ * coin sent with the tx (0 for non-payable calls like votes).
  */
-export async function estimateDonationGas(
-  projectId: string,
-  amount: string,
-): Promise<DonationGasEstimate> {
-  assertLocalSigner()
-  const meta = await fetchMetadataById(projectId)
-  if (!meta) throw new Error('Projekt-Metadaten nicht gefunden.')
-
-  const { signer, provider } = await getBlockchainContext()
-  const donationContract = Donation__factory.connect(meta.address, signer)
-  const amountWei = ethers.parseEther(amount)
-
-  const [gasLimit, feeData] = await Promise.all([
-    donationContract.donate.estimateGas({ value: amountWei }),
-    provider.getFeeData(),
-  ])
+async function buildGasEstimate(
+  provider: ethers.Provider,
+  estimateGasUnits: () => Promise<bigint>,
+  valueWei: bigint,
+): Promise<TxGasEstimate> {
+  const [gasLimit, feeData] = await Promise.all([estimateGasUnits(), provider.getFeeData()])
 
   // EIP-1559 upper bound if available, else the legacy gas price. This is the
   // MAX fee; the actual cost is usually lower — the overlay says so.
@@ -666,13 +655,52 @@ export async function estimateDonationGas(
   const gasCostWei = gasLimit * gasPriceWei
 
   return {
-    amount: trimTrailingZeros(ethers.formatEther(amountWei)),
+    amount: trimTrailingZeros(ethers.formatEther(valueWei)),
     gasUnits: gasLimit.toLocaleString('de-DE'),
     gasPriceGwei: trimTrailingZeros(ethers.formatUnits(gasPriceWei, 'gwei')),
     gasFee: trimTrailingZeros(ethers.formatEther(gasCostWei)),
-    total: trimTrailingZeros(ethers.formatEther(amountWei + gasCostWei)),
+    total: trimTrailingZeros(ethers.formatEther(valueWei + gasCostWei)),
     currency: NATIVE_CURRENCY,
   }
+}
+
+/**
+ * Estimate the full cost of a donation WITHOUT sending it — used by the checkout
+ * overlay. Same signer/RPC as the real donation, so the estimate matches what
+ * will be sent. Throws (with a revert reason) if the donation itself would fail.
+ */
+export async function estimateDonationGas(projectId: string, amount: string): Promise<TxGasEstimate> {
+  assertLocalSigner()
+  const meta = await fetchMetadataById(projectId)
+  if (!meta) throw new Error('Projekt-Metadaten nicht gefunden.')
+
+  const { signer, provider } = await getBlockchainContext()
+  const contract = Donation__factory.connect(meta.address, signer)
+  const amountWei = ethers.parseEther(amount)
+  return buildGasEstimate(provider, () => contract.donate.estimateGas({ value: amountWei }), amountWei)
+}
+
+/** Estimate the gas cost of a milestone vote (non-payable → no value, only gas). */
+export async function estimateVoteMilestoneGas(
+  projectAddress: string,
+  milestoneIndex: number,
+  approve: boolean,
+): Promise<TxGasEstimate> {
+  assertLocalSigner()
+  const { signer, provider } = await getBlockchainContext()
+  const contract = Donation__factory.connect(projectAddress, signer)
+  return buildGasEstimate(provider, () => contract.voteMilestone.estimateGas(milestoneIndex, approve), 0n)
+}
+
+/** Estimate the gas cost of a project-setup vote (non-payable → no value, only gas). */
+export async function estimateVoteSetupGas(
+  projectAddress: string,
+  approve: boolean,
+): Promise<TxGasEstimate> {
+  assertLocalSigner()
+  const { signer, provider } = await getBlockchainContext()
+  const contract = Donation__factory.connect(projectAddress, signer)
+  return buildGasEstimate(provider, () => contract.voteProjectSetup.estimateGas(approve), 0n)
 }
 
 export interface DonationResult {

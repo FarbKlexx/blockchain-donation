@@ -1,25 +1,36 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue'
-import type { DonationGasEstimate } from '@/services/projectsService'
+import type { TxGasEstimate } from '@/services/projectsService'
 import AppIcon from '@/components/ui/AppIcon.vue'
 
-// Checkout overlay: confirms a donation before it is signed/sent, and shows a
-// full cost breakdown (amount + estimated gas). The parent (ProjectHero) owns
-// the flow — it estimates gas, then sends only on `confirm`.
+// Generic checkout overlay: confirms an on-chain action before it is signed/sent
+// and shows a full cost breakdown (any transferred value + estimated gas). Used
+// for donations AND validator votes — both cost gas. The parent owns the flow:
+// it estimates gas, then sends only on `confirm`.
 const props = defineProps<{
   open: boolean
-  projectTitle: string
+  /** Dialog heading, e.g. "Spende bestätigen" / "Abstimmung bestätigen". */
+  title: string
+  /** Context line under the title (e.g. the project title). */
+  summary?: string
+  /** Detail rows shown above the gas section, e.g. the donation amount or the
+   *  vote being cast. */
+  rows?: { label: string; value: string }[]
+  /** Label for the grand-total row, e.g. "Gesamt (max.)" / "Netzwerkgebühr (max.)". */
+  totalLabel: string
   currency: string
-  /** The donation amount (native coin), e.g. "0.05". */
-  amount: string
+  /** Optional footnote under the box. */
+  hint?: string
   /** Gas breakdown once estimated; null while estimating or on error. */
-  estimate: DonationGasEstimate | null
+  estimate: TxGasEstimate | null
   /** The gas estimate request is in flight. */
   estimating: boolean
   /** Human-readable reason the estimate failed (if any). */
   estimateError: string | null
-  /** The donation tx itself is in flight. */
+  /** The transaction itself is in flight. */
   submitting: boolean
+  confirmLabel: string
+  submittingLabel?: string
 }>()
 
 const emit = defineEmits<{ confirm: []; cancel: [] }>()
@@ -34,11 +45,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 
 <template>
   <Teleport to="body">
-    <div v-if="open" class="checkout" role="dialog" aria-modal="true" aria-label="Spende bestätigen">
+    <div v-if="open" class="checkout" role="dialog" aria-modal="true" :aria-label="title">
       <div class="checkout__backdrop" @click="submitting || emit('cancel')" />
       <div class="checkout__panel">
         <header class="checkout__head">
-          <h2 class="checkout__title">Spende bestätigen</h2>
+          <h2 class="checkout__title">{{ title }}</h2>
           <button
             class="checkout__close"
             type="button"
@@ -50,16 +61,16 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           </button>
         </header>
 
-        <p class="checkout__project">{{ projectTitle }}</p>
+        <p v-if="summary" class="checkout__summary">{{ summary }}</p>
 
         <div class="checkout__box">
-          <!-- Amount -->
-          <div class="checkout__row">
-            <span class="checkout__label">Spendenbetrag</span>
-            <span class="checkout__value">{{ amount }} {{ currency }}</span>
+          <!-- Action detail rows (donation amount, vote being cast, …) -->
+          <div v-for="(row, i) in rows" :key="i" class="checkout__row">
+            <span class="checkout__label">{{ row.label }}</span>
+            <span class="checkout__value">{{ row.value }}</span>
           </div>
 
-          <div class="checkout__divider" />
+          <div v-if="rows && rows.length" class="checkout__divider" />
 
           <!-- Gas breakdown -->
           <p class="checkout__section">Geschätzte Netzwerkgebühr (Gas)</p>
@@ -93,15 +104,14 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 
           <!-- Total -->
           <div class="checkout__row checkout__row--total">
-            <span class="checkout__label">Gesamt (max.)</span>
-            <span class="checkout__value">{{ estimate ? estimate.total : amount }} {{ currency }}</span>
+            <span class="checkout__label">{{ totalLabel }}</span>
+            <span class="checkout__value">
+              {{ estimate ? `${estimate.total} ${currency}` : '…' }}
+            </span>
           </div>
         </div>
 
-        <p class="checkout__hint">
-          Betrag zzgl. maximaler Netzwerkgebühr. Die tatsächlichen Gaskosten können niedriger
-          ausfallen; die Gebühr geht an das Netzwerk, nicht an das Projekt.
-        </p>
+        <p v-if="hint" class="checkout__hint">{{ hint }}</p>
 
         <div class="checkout__actions">
           <button
@@ -118,7 +128,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
             :disabled="submitting || estimating"
             @click="emit('confirm')"
           >
-            {{ submitting ? 'Sende …' : 'Jetzt spenden' }}
+            {{ submitting ? (submittingLabel ?? 'Sende …') : confirmLabel }}
           </button>
         </div>
       </div>
@@ -146,7 +156,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 .checkout__panel {
   position: relative;
   width: 100%;
-  max-width: 440px;
+  max-width: 500px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -183,7 +193,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
   cursor: default;
 }
 
-.checkout__project {
+.checkout__summary {
   font-size: 14px;
   color: var(--bd-grey-text);
   margin-top: -8px;
@@ -223,9 +233,14 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 
 .checkout__label {
   min-width: 0;
+  /* Long labels ("Netzwerkgebühr (max.)") wrap instead of colliding with the
+     value, even on narrow screens. */
+  overflow-wrap: anywhere;
 }
 
 .checkout__value {
+  /* Keep the amount on one line and never let it shrink into the label. */
+  flex-shrink: 0;
   font-weight: 700;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
