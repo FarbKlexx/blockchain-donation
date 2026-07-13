@@ -1228,6 +1228,35 @@ export async function createProject(payload: CreateProjectPayload): Promise<Crea
   }
 }
 
+/**
+ * Estimate the gas cost of creating a project WITHOUT deploying it — used by the
+ * checkout overlay before the owner confirms. Simulates the exact
+ * `DonationFactory.createDonation` call (same signer/args as createProject), so
+ * the figure is accurate and it throws with a revert reason if the deployment
+ * would fail. Creating a project is non-payable — the owner deploys the campaign
+ * and only donors send value later — so the cost is gas only (valueWei = 0).
+ */
+export async function estimateCreateProjectGas(
+  payload: CreateProjectPayload,
+): Promise<TxGasEstimate> {
+  assertLocalSigner()
+  const { signer, provider } = await getBlockchainContext()
+  const factory = DonationFactory__factory.connect(requireFactoryAddress(), signer)
+  const milestoneWeiAmounts = payload.contract.milestoneAmounts.map((amt) => ethers.parseEther(amt))
+  const blankDescriptions = payload.contract.milestoneAmounts.map(() => '')
+  return buildGasEstimate(
+    provider,
+    () =>
+      factory.createDonation.estimateGas(
+        payload.contract.description,
+        payload.contract.durationSeconds,
+        milestoneWeiAmounts,
+        blankDescriptions,
+      ),
+    0n,
+  )
+}
+
 export interface WalletConnection {
   address: string
 }
