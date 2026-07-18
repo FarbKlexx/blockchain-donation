@@ -71,6 +71,10 @@ npm run node -w contracts
 # die Adressen in projectMetadata.json und löscht packages/backend/data.db (siehe unten).
 npm run deploy:donations -w contracts
 
+# Terminal 2 (optional) — Gutschein-System (GiftCardProject) deployen. Gibt die
+# Adresse aus; diese manuell als VITE_GIFTCARD_ADDRESS in packages/frontend/.env eintragen.
+npm run deploy:giftcard -w contracts
+
 # Terminal 3 — Backend (reseedet data.db aus dem aktualisierten projectMetadata.json)
 cd packages/backend && python app.py
 
@@ -98,6 +102,10 @@ Um eine Schreibaktion (Spenden/Voten/Auszahlen) als bestimmte Rolle zu testen,
 `VITE_DEV_PRIVATE_KEY` in `packages/frontend/.env` auf den passenden Private
 Key setzen (aus der Konsolenausgabe von Terminal 1) und Vite neu laden — kein
 Wallet/MetaMask nötig für die lokale Demo.
+
+Für das **Gutschein-System** (`deploy:giftcard`, optional): Owner ist der Deployer
+(#0), als Institutionen sind per Default die Accounts #1 und #6 freigeschaltet
+(anpassbar im Frontend als Owner oder über `ignition/modules/GiftCard.ts`).
 
 ---
 

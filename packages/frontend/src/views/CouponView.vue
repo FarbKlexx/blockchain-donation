@@ -50,8 +50,9 @@ onMounted(load)
       <div class="coupons__list-head">
         <h2 class="coupons__list-title">Alle Gutscheine</h2>
         <p class="coupons__list-lead">
-          Alle Gutscheine sind öffentlich auf der Blockchain einsehbar. Nur wer den privaten
-          Schlüssel besitzt, kann den Gutschein tatsächlich einlösen.
+          Alle Gutscheine sind öffentlich auf der Blockchain einsehbar. Zum Einlösen legt die Kundin
+          oder der Kunde den geheimen Code bei einer freigeschalteten Institution vor – diese erhält
+          den Betrag direkt vom Contract.
         </p>
       </div>
 
@@ -59,7 +60,7 @@ onMounted(load)
       <CouponTable v-else :coupons="coupons" />
 
       <p class="coupons__demo">
-        Zum Ausprobieren der Einlöse-Seite:
+        Checkout-Demo (Kundensicht):
         <RouterLink :to="{ name: 'coupon-redeem' }">Beim Kauf einlösen →</RouterLink>
       </p>
     </section>

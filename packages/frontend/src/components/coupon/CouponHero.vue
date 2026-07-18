@@ -5,9 +5,10 @@ import { useWalletStore } from '@/stores/wallet'
 import LoginDialog from '@/components/auth/LoginDialog.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 
-// The coupon landing hero. Coupons are created by USERS, not the site: a
-// connected wallet goes to the create page; a visitor without a wallet is
-// prompted to log in first. Distribution of the resulting keys happens off-site.
+// The coupon landing hero. Gift cards are issued by the system OPERATOR and
+// whitelisted INSTITUTIONS (the contract gates creation) and funded on-chain;
+// the create page itself gates who may proceed. A visitor without a wallet is
+// prompted to log in first. Distribution of the resulting codes happens off-site.
 const wallet = useWalletStore()
 const dialogOpen = ref(false)
 </script>
@@ -20,12 +21,13 @@ const dialogOpen = ref(false)
     </span>
 
     <div class="hero__intro">
-      <h1 class="hero__title">Eigene Gutscheine erstellen</h1>
+      <h1 class="hero__title">Blockchain-Gutscheine</h1>
       <p class="hero__lead">
-        Erstellen Sie mit Ihrer Wallet Ihre eigenen Gutscheine. Beim Erstellen zahlen Sie den
-        Rabattwert plus eine kleine Gebühr an den Smart Contract. Sie erhalten pro Gutschein einen
-        privaten Schlüssel als Gutscheincode – diesen verteilen Sie anschließend selbst, wie und an
-        wen Sie möchten. Wer den Schlüssel besitzt, kann den Rabatt beim Kauf einlösen.
+        Gutscheine werden vom Betreiber und freigeschalteten Institutionen erstellt und mit ihrem
+        Wert direkt im Smart Contract hinterlegt. Als Gutscheincode dient der private Schlüssel eines
+        Schlüsselpaares – er wird nie on-chain gespeichert. Wer den Code besitzt, kann den Gutschein
+        bei einer freigeschalteten Institution einlösen; abgelaufene Gutscheine kann der Ersteller
+        zurückfordern.
       </p>
     </div>
 

@@ -3,16 +3,16 @@
 // purely informational.
 const steps = [
   {
-    title: 'Wallet verbinden & erstellen',
-    body: 'Melden Sie sich mit Ihrer Wallet an und legen Sie fest, wie viele Gutscheine mit welchem Rabattwert Sie erstellen möchten.',
+    title: 'Erstellen & finanzieren',
+    body: 'Der Betreiber oder eine freigeschaltete Institution legt einen Gutschein an und hinterlegt den Wert direkt im Smart Contract. Dabei entsteht ein Schlüsselpaar – nur die öffentliche Adresse geht on-chain.',
   },
   {
-    title: 'An den Contract zahlen',
-    body: 'Beim Erstellen zahlen Sie den hinterlegten Rabattwert plus eine Gebühr an den Smart Contract. Sie erhalten dafür die privaten Schlüssel.',
+    title: 'Code weitergeben',
+    body: 'Der Ersteller erhält den geheimen Gutscheincode (den privaten Schlüssel) und gibt ihn an Kundinnen und Kunden weiter. Der Schlüssel selbst wird nie on-chain gespeichert.',
   },
   {
-    title: 'Schlüssel verteilen & einlösen',
-    body: 'Sie verteilen die Schlüssel selbst – wie und an wen Sie möchten. Wer einen Schlüssel besitzt, kann ihn beim Kauf einlösen; der Rabatt wird in ETH abgezogen.',
+    title: 'Beim Einkauf einlösen',
+    body: 'Die Kundin oder der Kunde legt den Code beim Einkauf vor. Die freigeschaltete Institution löst ihn ein und erhält den Betrag direkt vom Contract — der Kunde zahlt entsprechend weniger und fasst das Geld nie an. Ungenutzt abgelaufen? Der Ersteller kann den Betrag zurückfordern.',
   },
 ]
 </script>

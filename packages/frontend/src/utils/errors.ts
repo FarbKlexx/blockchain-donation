@@ -25,11 +25,38 @@ export class ApiError extends Error {
 
 const GENERIC = 'Es ist ein Fehler aufgetreten. Bitte versuche es erneut.'
 
-// Solidity require() strings from the Donation contract → user-facing German.
-// Only the reverts a normal user can actually hit through the UI are mapped;
-// anything unmapped falls back to a generic "rejected by the chain" message
-// (the raw reason is never shown, but it is logged to the console for devs).
+// Solidity require() strings from the Donation AND GiftCardProject contracts →
+// user-facing German. Only the reverts a normal user can actually hit through
+// the UI are mapped; anything unmapped falls back to a generic "rejected by the
+// chain" message (the raw reason is never shown, but it is logged for devs).
 const REVERT_MESSAGES: Record<string, string> = {
+  // ── GiftCardProject ──
+  'Not allowed to create gift cards':
+    'Nur der Betreiber oder eine freigeschaltete Institution kann Gutscheine erstellen.',
+  'Not a white listed institution.':
+    'Nur freigeschaltete Institutionen können Gutscheine einlösen.',
+  'Amount does not fulfill minimum requirement.':
+    'Der Gutscheinwert liegt unter dem vom Vertrag geforderten Mindestwert.',
+  'Duration is too short.':
+    'Die Gültigkeitsdauer liegt unter dem geforderten Mindestzeitraum.',
+  'GiftCard with Key already exists.':
+    'Für diesen Schlüssel existiert bereits ein Gutschein. Bitte erneut versuchen.',
+  'GiftCard with Key does not exist.': 'Zu diesem Code wurde kein Gutschein gefunden.',
+  'GiftCard is already redeemed.':
+    'Dieser Gutschein wurde bereits eingelöst oder erstattet.',
+  'Given amount does not match actual amount.':
+    'Der Betrag stimmt nicht mit dem hinterlegten Gutscheinwert überein.',
+  'Verification not successful':
+    'Der Gutschein-Code konnte nicht verifiziert werden. Bitte prüfe den Schlüssel.',
+  'Gift card has expired.': 'Dieser Gutschein ist abgelaufen.',
+  'Gift card has not yet expired.':
+    'Eine Erstattung ist erst nach Ablauf des Gutscheins möglich.',
+  'Sender is not the Creator.': 'Nur der Ersteller des Gutscheins kann diese Aktion ausführen.',
+  'Zero Address not allowed.': 'Ungültige Adresse.',
+  'Empty address institution not allowed': 'Bitte eine gültige Adresse angeben.',
+  'Institution already whitelisted': 'Diese Institution ist bereits freigeschaltet.',
+  'Sender is not the Owner': 'Nur der Betreiber des Gutschein-Systems kann das tun.',
+  // ── Donation ──
   'Same Vote was already made':
     'Du hast bereits genau so abgestimmt. Wähle die andere Option, um deine Stimme zu ändern.',
   'Address is not a validator': 'Nur ausgewählte Validatoren dieses Projekts können abstimmen.',

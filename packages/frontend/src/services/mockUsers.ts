@@ -79,4 +79,17 @@ export const MOCK_USERS: MockUser[] = [
     address: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
     privateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
   },
+  {
+    // Gift-card system only: the SHOP customers redeem their gift cards at. It is
+    // a whitelisted institution (see ignition/modules/GiftCard.ts), so it shows up
+    // as a selectable shop in the redeem checkout and receives the gift-card value.
+    // Account #7 is not used by any other persona here (its donation-side role, if
+    // any, is incidental — the two systems are independent).
+    key: 'shop',
+    label: 'Beispiel-Shop',
+    description:
+      'Freigeschalteter Shop im Gutschein-System — hier lösen Kund:innen Gutscheine ein; der Shop erhält den Betrag. (Account #7)',
+    address: '0x14dC79964da2C08b23698B3D3cc7Ca32193d9955',
+    privateKey: '0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356',
+  },
 ]

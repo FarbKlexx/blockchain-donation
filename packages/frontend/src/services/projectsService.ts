@@ -44,7 +44,12 @@ type WindowWithEthereum = { ethereum?: Eip1193Provider }
 // Reads (listing campaigns, role scans) never need a wallet — only writes do.
 // Prefers the local RPC endpoint so the project grid works with no wallet
 // installed at all; falls back to the injected wallet's provider otherwise.
-function getReadProvider(): ethers.Provider {
+//
+// Exported so the independent COUPON/gift-card subsystem (couponsService) can
+// reuse the SAME provider/signer plumbing — critical so both subsystems sign as
+// the one logged-in account (the wallet store sets that signer here via
+// setActiveSignerKey). Pure read helpers; no donation-specific behavior.
+export function getReadProvider(): ethers.Provider {
   const rpcUrl = import.meta.env.VITE_RPC_URL
   if (rpcUrl) return new ethers.JsonRpcProvider(rpcUrl)
   const injected = (window as WindowWithEthereum).ethereum
@@ -81,7 +86,8 @@ function currentDevKey(): string | undefined {
   return activeDevKey ?? import.meta.env.VITE_DEV_PRIVATE_KEY
 }
 
-async function getBlockchainContext() {
+// Exported for reuse by the coupon/gift-card subsystem (see getReadProvider).
+export async function getBlockchainContext() {
   // The logged-in persona's key, else the .env dev key, else the injected wallet:
   const devKey = currentDevKey()
   const rpcUrl = import.meta.env.VITE_RPC_URL
@@ -596,8 +602,11 @@ export async function getProject(id: string): Promise<Project | null> {
  * so a real/funded key can never silently send a transaction to a public chain.
  *
  * No key set (real wallet flow, e.g. MetaMask) → no-op.
+ *
+ * Exported so the coupon/gift-card subsystem enforces the SAME localhost-only
+ * guard on its writes (it shares this module's inlined key state).
  */
-function assertLocalSigner(): void {
+export function assertLocalSigner(): void {
   // Covers BOTH inlined key sources: the persona key set at login and the
   // .env fallback — either one must never sign against a non-local chain.
   const key = currentDevKey()
@@ -645,7 +654,7 @@ export interface TxGasEstimate {
  * throws with a revert reason if the call itself would fail. `valueWei` is any
  * coin sent with the tx (0 for non-payable calls like votes).
  */
-async function buildGasEstimate(
+export async function buildGasEstimate(
   provider: ethers.Provider,
   estimateGasUnits: () => Promise<bigint>,
   valueWei: bigint,
