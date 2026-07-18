@@ -399,30 +399,32 @@ export async function previewRedeemCoupon(privateKey: string): Promise<Coupon> {
 // shop's institution wallet — which also receives the funds — NOT by the customer.
 // The customer only supplies the gift-card code; they never sign or pay anything.
 //
-// In this frontend-only demo there is no institution backend, so the checkout
-// must hold a whitelisted institution's signing key. We source it from the DEV
-// personas (mockUsers) that are on the on-chain whitelist — these are the
-// selectable "shops". In production the institution's own system would submit
-// this transaction; the browser never would.
+// In a REAL deployment a customer is already on one shop's checkout, and that
+// shop's own backend submits the redemption — there is no "pick an institution"
+// step. This frontend-only demo mirrors that with a SINGLE, fixed shop: the
+// dedicated "Beispiel-Shop" persona (mockUsers, key 'shop'). Its signing key is a
+// public Hardhat test key, so it is used ONLY in dev against a local node; in
+// production the shop's own system submits the transaction, never the browser.
 
 export interface RedeemShop {
   /** The institution's on-chain address (receives the funds, is `msg.sender`). */
   address: string
-  /** Human label for the picker (the persona label in dev). */
+  /** Human label for display (the persona label in dev). */
   label: string
 }
 
-/** The shops a customer can redeem at: whitelisted institutions we also hold a
- *  signing key for (DEV personas). Empty outside dev — there the institution's
- *  backend performs the redeem, not this browser. */
-export async function listRedeemShops(): Promise<RedeemShop[]> {
-  if (!import.meta.env.DEV) return []
+/** THE shop the demo redeems at: the fixed "Beispiel-Shop" persona, but only if
+ *  it is actually a whitelisted institution on-chain. Null outside dev (no
+ *  baked-in key to sign with) or if the persona is not whitelisted — matching a
+ *  real deployment where the shop's own backend, not this browser, would submit. */
+export async function getRedeemShop(): Promise<RedeemShop | null> {
+  if (!import.meta.env.DEV) return null
+  const shop = MOCK_USERS.find((u) => u.key === 'shop')
+  if (!shop) return null
   const whitelist = await fetchWhitelist()
-  const onWhitelist = new Set(whitelist.map((a) => a.toLowerCase()))
-  return MOCK_USERS.filter((u) => onWhitelist.has(u.address.toLowerCase())).map((u) => ({
-    address: u.address,
-    label: u.label,
-  }))
+  const onWhitelist = whitelist.some((a) => a.toLowerCase() === shop.address.toLowerCase())
+  if (!onWhitelist) return null
+  return { address: shop.address, label: shop.label }
 }
 
 /** Refuse to use a baked-in shop key against anything but a local node (the shop
