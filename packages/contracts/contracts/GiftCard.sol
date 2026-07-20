@@ -90,7 +90,7 @@ contract GiftCardProject is EIP712{
     }
 
     ///Creates a giftcard with the given key as identifier and the duration to determine the xpiration date.
-    function createGiftCard(address _redemptionKey, uint256 duration) external payable isAllowedToCreateGiftCard() isNoZeroAddress(_redemptionKey) isGiftCardNotExisting(_redemptionKey) isEnoughGiftCardAmount(msg.value) isAboveMinimumDuration(duration){
+    function createGiftCard(address _redemptionKey, uint256 duration) external payable isNoZeroAddress(_redemptionKey) isGiftCardNotExisting(_redemptionKey) isEnoughGiftCardAmount(msg.value) isAboveMinimumDuration(duration){
         GiftCard memory giftCard = GiftCard(msg.sender, _redemptionKey, msg.value, false, block.timestamp + duration);
         giftCards.push(giftCard);
         giftCardIndices[_redemptionKey] = giftCards.length -1;
@@ -166,11 +166,6 @@ contract GiftCardProject is EIP712{
 
     modifier isOwner(){
         require(msg.sender == owner, "Sender is not the Owner");
-        _;
-    }
-
-    modifier isAllowedToCreateGiftCard() {
-        require(msg.sender == owner || isWhiteListed[msg.sender], "Not allowed to create gift cards");
         _;
     }
 
