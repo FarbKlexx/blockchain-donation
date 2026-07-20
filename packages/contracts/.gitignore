@@ -16,6 +16,12 @@
 # Typechain output
 /types
 
+# Hardhat Ignition deployment artifacts (generated per network: journal,
+# deployed addresses, build-info, contract artifacts). Local chains are
+# throwaway; un-ignore a specific network dir if you want to track its
+# deployed addresses (e.g. a public testnet/mainnet).
+/ignition/deployments
+
 # Environment files
 .env
 .env.*

@@ -2,20 +2,28 @@
 import { onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useWalletStore } from '@/stores/wallet'
-import { listMyCoupons } from '@/services/couponsService'
-import type { MyCoupon } from '@/types/coupon'
-import CouponCodeReveal from '@/components/coupon/CouponCodeReveal.vue'
+import { useNotificationStore } from '@/stores/notifications'
+import { toUserMessage } from '@/utils/errors'
+import { estimateRefundCouponGas, listMyCoupons, refundCoupon } from '@/services/couponsService'
+import type { TxGasEstimate } from '@/services/projectsService'
+import type { Coupon } from '@/types/coupon'
+import { formatEth, formatEur, formatUnixDate } from '@/utils/coupon'
+import { NATIVE_CURRENCY } from '@/utils/amount'
+import { shortenAddress } from '@/utils/address'
+import CouponStatusBadge from '@/components/coupon/CouponStatusBadge.vue'
+import TxConfirmDialog from '@/components/project/TxConfirmDialog.vue'
 import LoginDialog from '@/components/auth/LoginDialog.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 
-// "Meine Gutscheine": every coupon the connected wallet CREATED, each with its
-// private key revealed (the creator is authenticated by controlling the wallet).
-// The creator copies the keys here and distributes them off-site. Reads through
-// couponsService (the integration seam).
+// "Meine Gutscheine": every gift card the connected wallet CREATED, read from
+// chain (filtered by `creator`) — PUBLIC state only. The secret code is shown
+// once at creation and never stored, so it is NOT shown here. Expired, unredeemed
+// cards can be refunded to the creator (needs only the public redemption key).
 const wallet = useWalletStore()
+const notifications = useNotificationStore()
 const dialogOpen = ref(false)
 
-const coupons = ref<MyCoupon[]>([])
+const coupons = ref<Coupon[]>([])
 const loading = ref(false)
 
 async function load() {
@@ -26,14 +34,64 @@ async function load() {
   loading.value = true
   try {
     coupons.value = await listMyCoupons(wallet.address)
+  } catch (e) {
+    notifications.error(toUserMessage(e), 'Gutscheine konnten nicht geladen werden')
   } finally {
     loading.value = false
   }
 }
 
 onMounted(load)
-// Reload when the connected wallet changes (login / switch account).
 watch(() => wallet.address, load)
+
+// ── Refund flow (expired, unredeemed cards) ──────────────────────────────────
+const refundTarget = ref<Coupon | null>(null)
+const confirmOpen = ref(false)
+const estimate = ref<TxGasEstimate | null>(null)
+const estimating = ref(false)
+const estimateError = ref<string | null>(null)
+const submitting = ref(false)
+
+async function openRefund(coupon: Coupon) {
+  refundTarget.value = coupon
+  confirmOpen.value = true
+  estimate.value = null
+  estimateError.value = null
+  estimating.value = true
+  try {
+    estimate.value = await estimateRefundCouponGas(coupon.redemptionKey)
+  } catch (e) {
+    estimateError.value = toUserMessage(e)
+  } finally {
+    estimating.value = false
+  }
+}
+
+function cancelRefund() {
+  if (submitting.value) return
+  confirmOpen.value = false
+  refundTarget.value = null
+}
+
+async function confirmRefund() {
+  const target = refundTarget.value
+  if (!target || submitting.value) return
+  submitting.value = true
+  try {
+    const result = await refundCoupon(target.redemptionKey)
+    notifications.success(
+      `${formatEth(result.amount)} wurden an Ihre Wallet zurückerstattet.`,
+      'Erstattung erfolgreich',
+    )
+    confirmOpen.value = false
+    refundTarget.value = null
+    await Promise.all([load(), wallet.refreshBalance()])
+  } catch (e) {
+    notifications.error(toUserMessage(e), 'Erstattung fehlgeschlagen')
+  } finally {
+    submitting.value = false
+  }
+}
 </script>
 
 <template>
@@ -45,8 +103,9 @@ watch(() => wallet.address, load)
     <header class="mine__head">
       <h1 class="mine__title">Meine Gutscheine</h1>
       <p class="mine__subtitle">
-        Alle von Ihnen erstellten Gutscheine samt privatem Schlüssel. Verteilen Sie die Codes selbst
-        – wer einen Schlüssel besitzt, kann ihn einlösen.
+        Alle von Ihnen erstellten Gutscheine (öffentlicher Stand). Der geheime Code wird nur einmal
+        bei der Erstellung angezeigt und <strong>nicht gespeichert</strong> – bewahren Sie ihn selbst
+        auf. Abgelaufene, nicht eingelöste Gutscheine können Sie zurückfordern.
       </p>
     </header>
 
@@ -55,8 +114,7 @@ watch(() => wallet.address, load)
       <span class="mine__lock"><AppIcon name="lock" :size="20" /></span>
       <h2 class="mine__panel-title">Wallet verbinden</h2>
       <p class="mine__lead">
-        Melden Sie sich mit Ihrer Wallet an, um die von Ihnen erstellten Gutscheine und deren Codes
-        zu sehen.
+        Melden Sie sich mit Ihrer Wallet an, um die von Ihnen erstellten Gutscheine zu sehen.
       </p>
       <button class="mine__btn" type="button" @click="dialogOpen = true">
         Einloggen mit Wallet
@@ -70,11 +128,9 @@ watch(() => wallet.address, load)
       <div v-else-if="coupons.length === 0" class="mine__panel">
         <h2 class="mine__panel-title">Noch keine Gutscheine</h2>
         <p class="mine__lead">
-          Diese Wallet hat noch keine Gutscheine erstellt.
+          Diese Wallet hat noch keine Gutscheine erstellt. Jede Wallet kann Gutscheine erstellen.
         </p>
-        <RouterLink :to="{ name: 'coupon-create' }" class="mine__btn">
-          Gutscheine erstellen
-        </RouterLink>
+        <RouterLink :to="{ name: 'coupon-create' }" class="mine__btn"> Gutscheine erstellen </RouterLink>
       </div>
 
       <!-- List -->
@@ -82,18 +138,65 @@ watch(() => wallet.address, load)
         <p class="mine__count">
           {{ coupons.length }} {{ coupons.length === 1 ? 'Gutschein' : 'Gutscheine' }}
         </p>
-        <CouponCodeReveal
-          v-for="c in coupons"
-          :key="c.id"
-          :coupon-id="c.id"
-          :private-key="c.privateKey"
-          :coupon-address="c.couponAddress"
-          :value="c.value"
-          :value-eur="c.valueEur"
-          :redeemed="c.status === 'redeemed'"
-        />
+        <div v-for="c in coupons" :key="c.redemptionKey" class="card mine__card">
+          <div class="mine__card-head">
+            <a
+              class="mine__key"
+              :href="c.explorerUrl"
+              target="_blank"
+              rel="noopener"
+              :title="c.redemptionKey"
+            >
+              {{ shortenAddress(c.redemptionKey) }}
+            </a>
+            <CouponStatusBadge :status="c.status" />
+          </div>
+          <div class="mine__card-meta">
+            <span class="mine__amount">
+              {{ formatEur(c.amountEur) }} <small>≈ {{ formatEth(c.amount) }}</small>
+            </span>
+            <span class="mine__valid">Gültig bis {{ formatUnixDate(c.expirationDate) }}</span>
+          </div>
+
+          <div v-if="c.status === 'expired'" class="mine__refund">
+            <p class="mine__refund-text">
+              Abgelaufen und nicht eingelöst – Sie können die hinterlegten
+              <strong>{{ formatEth(c.amount) }}</strong> zurückfordern.
+            </p>
+            <button
+              class="mine__refund-btn"
+              type="button"
+              :disabled="submitting"
+              @click="openRefund(c)"
+            >
+              Betrag zurückfordern
+            </button>
+          </div>
+        </div>
       </div>
     </template>
+
+    <TxConfirmDialog
+      :open="confirmOpen"
+      title="Erstattung bestätigen"
+      :summary="
+        refundTarget ? `Gutschein über ${formatEth(refundTarget.amount)} zurückfordern` : undefined
+      "
+      :rows="
+        refundTarget ? [{ label: 'Erstattungsbetrag', value: formatEth(refundTarget.amount) }] : []
+      "
+      total-label="Netzwerkgebühr (max.)"
+      :currency="NATIVE_CURRENCY"
+      hint="Der hinterlegte Betrag wird an Ihre Wallet zurückgezahlt; Sie tragen nur die Netzwerkgebühr."
+      :estimate="estimate"
+      :estimating="estimating"
+      :estimate-error="estimateError"
+      :submitting="submitting"
+      confirm-label="Jetzt zurückfordern"
+      submitting-label="Erstatte …"
+      @confirm="confirmRefund"
+      @cancel="cancelRefund"
+    />
 
     <LoginDialog :open="dialogOpen" @close="dialogOpen = false" />
   </div>
@@ -149,6 +252,92 @@ watch(() => wallet.address, load)
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.card {
+  background: var(--bd-surface);
+  border: 1px solid var(--bd-stroke);
+  border-radius: var(--bd-radius-lg);
+  box-shadow: var(--bd-shadow-card);
+}
+
+.mine__card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 24px;
+}
+
+.mine__card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mine__key {
+  font-family: var(--bd-font-stats, monospace);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--bd-black);
+}
+
+.mine__key:hover {
+  text-decoration: underline;
+}
+
+.mine__card-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 14px;
+  color: var(--bd-grey-text);
+}
+
+.mine__amount {
+  font-weight: 700;
+  color: var(--bd-black);
+}
+
+.mine__amount small {
+  font-weight: 500;
+  color: var(--bd-grey-text);
+}
+
+.mine__refund {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--bd-stroke);
+  border-radius: var(--bd-radius-md);
+  background: var(--bd-grey);
+}
+
+.mine__refund-text {
+  font-size: 13px;
+  color: var(--bd-grey-text);
+}
+
+.mine__refund-btn {
+  padding: 10px 16px;
+  border: none;
+  border-radius: var(--bd-radius-sm);
+  background: var(--bd-black);
+  color: var(--bd-surface);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mine__refund-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .mine__count {

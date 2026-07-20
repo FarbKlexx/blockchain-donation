@@ -18,13 +18,14 @@
 // the UI-element → data-source mapping.
 // ─────────────────────────────────────────────────────────────────────────
 
-import { ethers } from 'ethers'
+import { ethers, type Eip1193Provider } from 'ethers'
 import { DonationFactory__factory, Donation__factory } from '@/contracts/typechain'
 import type { Funding, MilestoneStatus, NewsEntry, Project, ProjectFilter, ProjectSort, ProjectStatus } from '@/types/project'
 import type { ContractCampaign, ProjectMetadata } from '@/types/sources'
 import { daysLeftUntil, hasEnded, percentFunded, timeLeftShort } from '@/utils/format'
-import { NATIVE_CURRENCY, decimalsFor, validateAmount } from '@/utils/amount'
+import { NATIVE_CURRENCY, trimTrailingZeros } from '@/utils/amount'
 import { explorerAddressUrl, explorerLabel } from '@/utils/address'
+import { ApiError } from '@/utils/errors'
 
 const FACTORY_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS
 
@@ -36,13 +37,23 @@ function requireFactoryAddress(): string {
 // Mapping uint8 from the chain to String for the frontend
 const STATUS_MAP = ['Funding', 'ToBeApproved', 'Payout', 'Failed', 'Closed'] as const;
 
+// The injected wallet (MetaMask et al.) exposes an EIP-1193 provider on
+// `window.ethereum`. Typed locally so we never reach for `any`.
+type WindowWithEthereum = { ethereum?: Eip1193Provider }
+
 // Reads (listing campaigns, role scans) never need a wallet — only writes do.
 // Prefers the local RPC endpoint so the project grid works with no wallet
 // installed at all; falls back to the injected wallet's provider otherwise.
-function getReadProvider(): ethers.Provider {
+//
+// Exported so the independent COUPON/gift-card subsystem (couponsService) can
+// reuse the SAME provider/signer plumbing — critical so both subsystems sign as
+// the one logged-in account (the wallet store sets that signer here via
+// setActiveSignerKey). Pure read helpers; no donation-specific behavior.
+export function getReadProvider(): ethers.Provider {
   const rpcUrl = import.meta.env.VITE_RPC_URL
   if (rpcUrl) return new ethers.JsonRpcProvider(rpcUrl)
-  if ((window as any).ethereum) return new ethers.BrowserProvider((window as any).ethereum)
+  const injected = (window as WindowWithEthereum).ethereum
+  if (injected) return new ethers.BrowserProvider(injected)
   throw new Error('Keine RPC-Verbindung verfügbar (weder VITE_RPC_URL noch eine Krypto-Wallet).')
 }
 
@@ -75,7 +86,8 @@ function currentDevKey(): string | undefined {
   return activeDevKey ?? import.meta.env.VITE_DEV_PRIVATE_KEY
 }
 
-async function getBlockchainContext() {
+// Exported for reuse by the coupon/gift-card subsystem (see getReadProvider).
+export async function getBlockchainContext() {
   // The logged-in persona's key, else the .env dev key, else the injected wallet:
   const devKey = currentDevKey()
   const rpcUrl = import.meta.env.VITE_RPC_URL
@@ -84,16 +96,23 @@ async function getBlockchainContext() {
     return { provider, signer: new ethers.Wallet(devKey, provider) }
   }
 
-  if (!(window as any).ethereum) throw new Error('Keine Krypto-Wallet gefunden.')
-  const provider = new ethers.BrowserProvider((window as any).ethereum)
+  const injected = (window as WindowWithEthereum).ethereum
+  if (!injected) throw new Error('Keine Krypto-Wallet gefunden.')
+  const provider = new ethers.BrowserProvider(injected)
   const signer = await provider.getSigner()
   return { provider, signer }
 }
 
 async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, init)
+  let response: Response
+  try {
+    response = await fetch(input, init)
+  } catch {
+    // Network failure — the server could not be reached at all (no HTTP status).
+    throw new ApiError(0)
+  }
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status} ${response.statusText}`)
+    throw new ApiError(response.status, response.statusText)
   }
   return response.json() as Promise<T>
 }
@@ -208,12 +227,25 @@ export interface ProjectNewsCreateResult extends NewsEntry {
   project_id: string
 }
 
+// The backend wraps the persisted row in an envelope: { status, news }.
+interface CreateNewsResponse {
+  status: string
+  news: ProjectNewsCreateResult
+}
+
+/**
+ * Append a single news entry to an existing project (POST /api/projects/:id/news).
+ * Unlike the bulk metadata PUT (updateProjectMetadata), this only inserts the one
+ * entry — it never rewrites the project's other news. Returns the persisted row
+ * (with its backend-assigned id), unwrapped from the response envelope.
+ */
 export async function createProjectNews(projectId: string, news: NewsEntry): Promise<ProjectNewsCreateResult> {
-  return fetchJson<ProjectNewsCreateResult>(`/api/projects/${projectId}/news`, {
+  const response = await fetchJson<CreateNewsResponse>(`/api/projects/${projectId}/news`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(news),
   })
+  return response.news
 }
 
 // ── Account roles (one-time scan at login) ───────────────────────────────────
@@ -292,6 +324,63 @@ export async function loadAccountSession(address: string): Promise<AccountSessio
       owner: ownerOf.length > 0,
     },
   }
+}
+
+// ── This account's votes on ONE project (derived from chain) ─────────────────
+// The contract records each validator's vote per poll (hasVotedForProjectSetup /
+// hasVotedForMilestone, plus the votesFor… value). Reading it here means the
+// UI's "you voted X" state is DERIVED FROM CHAIN — it survives a page reload and
+// reflects a changed vote, instead of living only in session memory (which would
+// vanish on reload, re-enable the button, and revert on-chain as a duplicate).
+
+export type VoteChoice = 'approve' | 'reject'
+
+export interface MyProjectVotes {
+  /** The account's project-setup vote, or null if it hasn't voted. */
+  setup: VoteChoice | null
+  /** The account's vote per milestone index (only indices it has voted on). */
+  milestones: Record<number, VoteChoice>
+}
+
+/**
+ * Read the connected account's votes for a project straight from the contract,
+ * so the detail view can show them consistently across reloads and know which
+ * choice is already cast. The contract lets a validator CHANGE their vote while a
+ * poll is open, but reverts a vote identical to the current one ("Same Vote was
+ * already made") — so the UI needs the current choice to disable exactly that one.
+ */
+export async function getMyProjectVotes(
+  projectAddress: string,
+  account: string,
+): Promise<MyProjectVotes> {
+  const provider = getReadProvider()
+  const contract = Donation__factory.connect(projectAddress, provider)
+
+  const [hasSetupVote, milestoneCount] = await Promise.all([
+    contract.hasVotedForProjectSetup(account),
+    contract.getMilestoneCount(),
+  ])
+
+  let setup: VoteChoice | null = null
+  if (hasSetupVote) {
+    setup = (await contract.votesForProjectSetup(account)) ? 'approve' : 'reject'
+  }
+
+  const count = Number(milestoneCount)
+  const perMilestone = await Promise.all(
+    Array.from({ length: count }, async (_, i) => {
+      if (!(await contract.hasVotedForMilestone(i, account))) return null
+      const choice: VoteChoice = (await contract.votesForMilestone(i, account)) ? 'approve' : 'reject'
+      return { index: i, choice }
+    }),
+  )
+
+  const milestones: Record<number, VoteChoice> = {}
+  for (const entry of perMilestone) {
+    if (entry) milestones[entry.index] = entry.choice
+  }
+
+  return { setup, milestones }
 }
 
 // ── Derivations: raw on-chain fields → the UI model ──────────────────────────
@@ -373,7 +462,7 @@ function mergeProject(c: ContractCampaign, m: ProjectMetadata): Project {
     // or an array of objects with a `description` field. Ensure the UI always
     // receives `description: string[]`.
     description: Array.isArray(m.description)
-      ? m.description.map((d) => (typeof d === 'string' ? d : String((d as any).description ?? '')))
+      ? m.description.map((d) => (typeof d === 'string' ? d : String((d as { description?: unknown }).description ?? '')))
       : [String(m.description ?? '')],
     image: m.image,
     category: m.category,
@@ -388,6 +477,9 @@ function mergeProject(c: ContractCampaign, m: ProjectMetadata): Project {
     // milestone the owner may pay / validators may vote on from these.
     contractStatus: c.currentStatus,
     currentMilestoneIndex: c.currentMilestoneIndex,
+    // Failure/refund state, passed straight through for the failed-project UI.
+    refundableBalance: c.refundableBalance,
+    votingDeadline: c.votingDeadline,
     projectSetup: {
       approvedCount: c.projectSetup.approvedCount,
       rejectedCount: c.projectSetup.rejectedCount,
@@ -510,8 +602,11 @@ export async function getProject(id: string): Promise<Project | null> {
  * so a real/funded key can never silently send a transaction to a public chain.
  *
  * No key set (real wallet flow, e.g. MetaMask) → no-op.
+ *
+ * Exported so the coupon/gift-card subsystem enforces the SAME localhost-only
+ * guard on its writes (it shares this module's inlined key state).
  */
-function assertLocalSigner(): void {
+export function assertLocalSigner(): void {
   // Covers BOTH inlined key sources: the persona key set at login and the
   // .env fallback — either one must never sign against a non-local chain.
   const key = currentDevKey()
@@ -532,6 +627,92 @@ function assertLocalSigner(): void {
         'Dieses Frontend ist ausschließlich für die lokale Entwicklung gedacht.',
     )
   }
+}
+
+/** A full, display-ready breakdown of what a transaction will cost — any value
+ *  it transfers (0 for non-payable calls like votes) plus the estimated network
+ *  (gas) fee, and their sum. Strings are formatted in the native coin, except
+ *  `gasPriceGwei` (Gwei). Shown in the checkout overlay BEFORE the user signs. */
+export interface TxGasEstimate {
+  /** Value transferred with the tx (native coin), "0" for non-payable calls. */
+  amount: string
+  /** Estimated gas units the tx will consume, grouped for display, e.g. "68.912". */
+  gasUnits: string
+  /** Gas price used for the estimate (Gwei), e.g. "1.5". */
+  gasPriceGwei: string
+  /** Estimated gas fee = gasUnits × gasPrice, in the native coin. */
+  gasFee: string
+  /** amount + gasFee — the maximum this interaction costs the user. */
+  total: string
+  currency: string
+}
+
+/**
+ * Turn a gas-units estimator + the current fee data into a display-ready cost
+ * breakdown. `estimateGasUnits` runs a real EVM simulation of the exact call
+ * (so contract preconditions are checked and the figure is accurate), and
+ * throws with a revert reason if the call itself would fail. `valueWei` is any
+ * coin sent with the tx (0 for non-payable calls like votes).
+ */
+export async function buildGasEstimate(
+  provider: ethers.Provider,
+  estimateGasUnits: () => Promise<bigint>,
+  valueWei: bigint,
+): Promise<TxGasEstimate> {
+  const [gasLimit, feeData] = await Promise.all([estimateGasUnits(), provider.getFeeData()])
+
+  // EIP-1559 upper bound if available, else the legacy gas price. This is the
+  // MAX fee; the actual cost is usually lower — the overlay says so.
+  const gasPriceWei = feeData.maxFeePerGas ?? feeData.gasPrice ?? 0n
+  const gasCostWei = gasLimit * gasPriceWei
+
+  return {
+    amount: trimTrailingZeros(ethers.formatEther(valueWei)),
+    gasUnits: gasLimit.toLocaleString('de-DE'),
+    gasPriceGwei: trimTrailingZeros(ethers.formatUnits(gasPriceWei, 'gwei')),
+    gasFee: trimTrailingZeros(ethers.formatEther(gasCostWei)),
+    total: trimTrailingZeros(ethers.formatEther(valueWei + gasCostWei)),
+    currency: NATIVE_CURRENCY,
+  }
+}
+
+/**
+ * Estimate the full cost of a donation WITHOUT sending it — used by the checkout
+ * overlay. Same signer/RPC as the real donation, so the estimate matches what
+ * will be sent. Throws (with a revert reason) if the donation itself would fail.
+ */
+export async function estimateDonationGas(projectId: string, amount: string): Promise<TxGasEstimate> {
+  assertLocalSigner()
+  const meta = await fetchMetadataById(projectId)
+  if (!meta) throw new Error('Projekt-Metadaten nicht gefunden.')
+
+  const { signer, provider } = await getBlockchainContext()
+  const contract = Donation__factory.connect(meta.address, signer)
+  const amountWei = ethers.parseEther(amount)
+  return buildGasEstimate(provider, () => contract.donate.estimateGas({ value: amountWei }), amountWei)
+}
+
+/** Estimate the gas cost of a milestone vote (non-payable → no value, only gas). */
+export async function estimateVoteMilestoneGas(
+  projectAddress: string,
+  milestoneIndex: number,
+  approve: boolean,
+): Promise<TxGasEstimate> {
+  assertLocalSigner()
+  const { signer, provider } = await getBlockchainContext()
+  const contract = Donation__factory.connect(projectAddress, signer)
+  return buildGasEstimate(provider, () => contract.voteMilestone.estimateGas(milestoneIndex, approve), 0n)
+}
+
+/** Estimate the gas cost of a project-setup vote (non-payable → no value, only gas). */
+export async function estimateVoteSetupGas(
+  projectAddress: string,
+  approve: boolean,
+): Promise<TxGasEstimate> {
+  assertLocalSigner()
+  const { signer, provider } = await getBlockchainContext()
+  const contract = Donation__factory.connect(projectAddress, signer)
+  return buildGasEstimate(provider, () => contract.voteProjectSetup.estimateGas(approve), 0n)
 }
 
 export interface DonationResult {
@@ -609,7 +790,7 @@ export async function voteOnMilestone(
   approve: boolean
 ): Promise<VoteMilestoneResult> {
   assertLocalSigner()
-  const { signer, provider } = await getBlockchainContext()
+  const { signer } = await getBlockchainContext()
   const donationContract = Donation__factory.connect(projectAddress, signer)
 
   const tx = await donationContract.voteMilestone(milestoneIndex, approve)
@@ -727,6 +908,182 @@ export async function payoutMilestone(
     currentStatus: STATUS_MAP[Number(rawStatus)] ?? 'Funding',
     currentMilestoneIndex: Number(curIndex),
   }
+}
+
+/** Estimate the gas cost of a milestone payout (non-payable → owner receives the
+ *  funds, only pays gas). No value is sent, so amount = 0. */
+export async function estimatePayoutMilestoneGas(
+  projectAddress: string,
+  milestoneIndex: number,
+): Promise<TxGasEstimate> {
+  assertLocalSigner()
+  const { signer, provider } = await getBlockchainContext()
+  const contract = Donation__factory.connect(projectAddress, signer)
+  return buildGasEstimate(provider, () => contract.payout.estimateGas(milestoneIndex), 0n)
+}
+
+export interface PayoutRestResult {
+  txHash: string
+  currentStatus: string
+}
+
+/**
+ * Owner-only: pay out any funds left in the contract after the project is CLOSED
+ * (all milestones released). A safety net for a residual balance; the contract
+ * enforces `onlyWhenClosed` and isOwner. Authoritative status is re-read after.
+ */
+export async function payoutRest(projectAddress: string): Promise<PayoutRestResult> {
+  assertLocalSigner()
+  const { signer } = await getBlockchainContext()
+  const contract = Donation__factory.connect(projectAddress, signer)
+
+  const tx = await contract.payoutRest()
+  const receipt = await tx.wait()
+  if (!receipt || receipt.status === 0) {
+    throw new Error('Die Auszahlung auf der Blockchain ist fehlgeschlagen.')
+  }
+
+  const rawStatus = await contract.currentStatus()
+  return { txHash: tx.hash, currentStatus: STATUS_MAP[Number(rawStatus)] ?? 'Closed' }
+}
+
+/** Estimate the gas cost of the rest payout (non-payable → gas only, amount = 0). */
+export async function estimatePayoutRestGas(projectAddress: string): Promise<TxGasEstimate> {
+  assertLocalSigner()
+  const { signer, provider } = await getBlockchainContext()
+  const contract = Donation__factory.connect(projectAddress, signer)
+  return buildGasEstimate(provider, () => contract.payoutRest.estimateGas(), 0n)
+}
+
+/** The funds currently held by the contract (the amount `payoutRest` would send
+ *  to the owner), as a clean decimal string in the native coin. Read-only. */
+export async function getRemainingBalance(projectAddress: string): Promise<string> {
+  const provider = getReadProvider()
+  const contract = Donation__factory.connect(projectAddress, provider)
+  return trimTrailingZeros(ethers.formatEther(await contract.getContractBalance()))
+}
+
+/** The connected account's on-chain native-coin balance (e.g. ETH), as a number.
+ *  Read-only (no signer needed) — shown next to the account chip in the navbar. */
+export async function getWalletBalance(account: string): Promise<number> {
+  const provider = getReadProvider()
+  return Number(ethers.formatEther(await provider.getBalance(account)))
+}
+
+// ── Failure & refunds (donor payback) ────────────────────────────────────────
+
+export interface RefundInfo {
+  /** The account's total contribution to this project (native coin); "0" if it
+   *  never donated or has already been refunded. */
+  donated: string
+  /** The proportional share it can reclaim now from the refundable balance
+   *  (native coin) — mirrors the contract's `donated × refundable / total`. */
+  refundable: string
+}
+
+/**
+ * Read the connected account's refund position for a (failed) project: how much
+ * it donated and the share it can reclaim. Read-only. `donated === "0"` means
+ * nothing to reclaim (never donated, or already refunded — the contract zeroes
+ * the balance on refund).
+ */
+export async function getRefundInfo(projectAddress: string, account: string): Promise<RefundInfo> {
+  const provider = getReadProvider()
+  const contract = Donation__factory.connect(projectAddress, provider)
+  const [donatedWei, refundableWei, totalWei] = await Promise.all([
+    contract.donations(account),
+    contract.refundableBalance(),
+    contract.totalDonations(),
+  ])
+  const shareWei = totalWei > 0n ? (donatedWei * refundableWei) / totalWei : 0n
+  return {
+    donated: trimTrailingZeros(ethers.formatEther(donatedWei)),
+    refundable: trimTrailingZeros(ethers.formatEther(shareWei)),
+  }
+}
+
+export interface TxResult {
+  txHash: string
+  currentStatus: string
+}
+
+/**
+ * Donor-only: reclaim this account's proportional share of a FAILED project's
+ * funds (`refund()`). Only valid while `Failed`; the contract zeroes the donor's
+ * balance so it can't be claimed twice. Authoritative status re-read after.
+ */
+export async function refund(projectAddress: string): Promise<TxResult> {
+  assertLocalSigner()
+  const { signer } = await getBlockchainContext()
+  const contract = Donation__factory.connect(projectAddress, signer)
+  const tx = await contract.refund()
+  const receipt = await tx.wait()
+  if (!receipt || receipt.status === 0) {
+    throw new Error('Die Rückzahlung auf der Blockchain ist fehlgeschlagen.')
+  }
+  const rawStatus = await contract.currentStatus()
+  return { txHash: tx.hash, currentStatus: STATUS_MAP[Number(rawStatus)] ?? 'Failed' }
+}
+
+/** Estimate the gas cost of a refund (donor receives funds, pays only gas). */
+export async function estimateRefundGas(projectAddress: string): Promise<TxGasEstimate> {
+  assertLocalSigner()
+  const { signer, provider } = await getBlockchainContext()
+  const contract = Donation__factory.connect(projectAddress, signer)
+  return buildGasEstimate(provider, () => contract.refund.estimateGas(), 0n)
+}
+
+/**
+ * Flip a campaign whose funding period ended WITHOUT reaching the goal to Failed
+ * (`markAsFailedFunding`) — which fixes the refundable balance so donors can
+ * reclaim. Callable by anyone once the conditions hold (the contract checks
+ * onlyDuringFunding, past `end`, goal not reached).
+ */
+export async function markAsFailedFunding(projectAddress: string): Promise<TxResult> {
+  assertLocalSigner()
+  const { signer } = await getBlockchainContext()
+  const contract = Donation__factory.connect(projectAddress, signer)
+  const tx = await contract.markAsFailedFunding()
+  const receipt = await tx.wait()
+  if (!receipt || receipt.status === 0) {
+    throw new Error('Die Aktion auf der Blockchain ist fehlgeschlagen.')
+  }
+  const rawStatus = await contract.currentStatus()
+  return { txHash: tx.hash, currentStatus: STATUS_MAP[Number(rawStatus)] ?? 'Failed' }
+}
+
+export async function estimateMarkAsFailedFundingGas(projectAddress: string): Promise<TxGasEstimate> {
+  assertLocalSigner()
+  const { signer, provider } = await getBlockchainContext()
+  const contract = Donation__factory.connect(projectAddress, signer)
+  return buildGasEstimate(provider, () => contract.markAsFailedFunding.estimateGas(), 0n)
+}
+
+/**
+ * Flip a campaign stuck in ToBeApproved/Payout whose vote deadline has passed to
+ * Failed (`markAsFailedDueToExpiredVoting`), enabling refunds. Callable by anyone
+ * once the deadline is exceeded (the contract enforces the conditions).
+ */
+export async function markAsFailedDueToExpiredVoting(projectAddress: string): Promise<TxResult> {
+  assertLocalSigner()
+  const { signer } = await getBlockchainContext()
+  const contract = Donation__factory.connect(projectAddress, signer)
+  const tx = await contract.markAsFailedDueToExpiredVoting()
+  const receipt = await tx.wait()
+  if (!receipt || receipt.status === 0) {
+    throw new Error('Die Aktion auf der Blockchain ist fehlgeschlagen.')
+  }
+  const rawStatus = await contract.currentStatus()
+  return { txHash: tx.hash, currentStatus: STATUS_MAP[Number(rawStatus)] ?? 'Failed' }
+}
+
+export async function estimateMarkAsFailedExpiredVotingGas(
+  projectAddress: string,
+): Promise<TxGasEstimate> {
+  assertLocalSigner()
+  const { signer, provider } = await getBlockchainContext()
+  const contract = Donation__factory.connect(projectAddress, signer)
+  return buildGasEstimate(provider, () => contract.markAsFailedDueToExpiredVoting.estimateGas(), 0n)
 }
 
 /** The editable, OFF-CHAIN slice of a project — exactly the metadata an owner
@@ -878,6 +1235,35 @@ export async function createProject(payload: CreateProjectPayload): Promise<Crea
     txHash: tx.hash, 
     id: response.project_id
   }
+}
+
+/**
+ * Estimate the gas cost of creating a project WITHOUT deploying it — used by the
+ * checkout overlay before the owner confirms. Simulates the exact
+ * `DonationFactory.createDonation` call (same signer/args as createProject), so
+ * the figure is accurate and it throws with a revert reason if the deployment
+ * would fail. Creating a project is non-payable — the owner deploys the campaign
+ * and only donors send value later — so the cost is gas only (valueWei = 0).
+ */
+export async function estimateCreateProjectGas(
+  payload: CreateProjectPayload,
+): Promise<TxGasEstimate> {
+  assertLocalSigner()
+  const { signer, provider } = await getBlockchainContext()
+  const factory = DonationFactory__factory.connect(requireFactoryAddress(), signer)
+  const milestoneWeiAmounts = payload.contract.milestoneAmounts.map((amt) => ethers.parseEther(amt))
+  const blankDescriptions = payload.contract.milestoneAmounts.map(() => '')
+  return buildGasEstimate(
+    provider,
+    () =>
+      factory.createDonation.estimateGas(
+        payload.contract.description,
+        payload.contract.durationSeconds,
+        milestoneWeiAmounts,
+        blankDescriptions,
+      ),
+    0n,
+  )
 }
 
 export interface WalletConnection {

@@ -4,18 +4,18 @@ import { RouterLink } from 'vue-router'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { formatEth, formatEur } from '@/utils/coupon'
 
-// Reveals a coupon's redeem code to its CREATOR (create success + "Meine
-// Gutscheine"). The code is two parts: 1) the coupon ID, 2) the private key (the
-// secret). Anyone holding both can redeem — so it is framed as a secret to guard
-// and to distribute deliberately.
+// Shows a freshly created gift card's secret code to its creator — ONCE. The
+// redeemable code IS the keypair's private key; it is never stored (no
+// localStorage, no backend), so this is the only moment it can be copied
+// (GitHub-style: shown at creation, then gone). Whoever holds it can have it
+// redeemed at a shop. The public redemption key is shown alongside only as a
+// reference.
 const props = defineProps<{
-  couponId: number
+  redemptionKey: string
+  /** The secret code — present only here, at creation. */
   privateKey: string
-  couponAddress: string
-  value: number
-  valueEur: number
-  /** Already spent — show as redeemed, hide the "einlösen" CTA. */
-  redeemed?: boolean
+  amount: number
+  amountEur: number
 }>()
 
 const copied = ref<string | null>(null)
@@ -36,38 +36,35 @@ async function copy(field: string, text: string) {
 <template>
   <div class="reveal card">
     <div class="reveal__head">
-      <span v-if="props.redeemed" class="reveal__badge reveal__badge--redeemed">
-        Bereits eingelöst
-      </span>
-      <span v-else class="reveal__badge"><AppIcon name="check" :size="16" /> Gutscheincode</span>
+      <span class="reveal__badge"><AppIcon name="check" :size="16" /> Gutscheincode</span>
       <span class="reveal__value">
-        {{ formatEur(props.valueEur) }}
-        <small>≈ {{ formatEth(props.value) }}</small>
+        {{ formatEur(props.amountEur) }}
+        <small>≈ {{ formatEth(props.amount) }}</small>
       </span>
     </div>
 
-    <p v-if="props.redeemed" class="reveal__hint">
-      Dieser Gutschein wurde bereits eingelöst und kann nicht erneut verwendet werden. Ihr Code wird
-      hier nur noch zur Ansicht angezeigt.
-    </p>
-    <p v-else class="reveal__hint">
-      Das ist Ihr Gutscheincode. Er besteht aus zwei Teilen. Bewahren Sie ihn sicher auf –
-      <strong>jeder, der diesen Code besitzt, kann den Gutschein einlösen</strong> (Sie können ihn
-      also auch verschenken).
+    <p class="reveal__warn" role="alert">
+      <AppIcon name="circle-alert" :size="15" />
+      <span>
+        Dies ist der <strong>einzige Zeitpunkt</strong>, an dem der Gutscheincode angezeigt wird.
+        Kopieren Sie ihn jetzt und bewahren Sie ihn sicher auf – er wird <strong>nicht
+        gespeichert</strong> und kann später nicht erneut abgerufen werden. Wer den Code besitzt, kann
+        den Gutschein einlösen.
+      </span>
     </p>
 
     <div class="reveal__field">
-      <span class="reveal__label">1 · Gutschein-ID</span>
+      <span class="reveal__label">Öffentlicher Schlüssel (Referenz)</span>
       <div class="reveal__value-row">
-        <code class="reveal__code">{{ props.couponId }}</code>
-        <button type="button" class="reveal__copy" @click="copy('id', String(props.couponId))">
-          {{ copied === 'id' ? 'Kopiert ✓' : 'Kopieren' }}
+        <code class="reveal__code">{{ props.redemptionKey }}</code>
+        <button type="button" class="reveal__copy" @click="copy('key-pub', props.redemptionKey)">
+          {{ copied === 'key-pub' ? 'Kopiert ✓' : 'Kopieren' }}
         </button>
       </div>
     </div>
 
     <div class="reveal__field">
-      <span class="reveal__label">2 · Privater Schlüssel</span>
+      <span class="reveal__label">Gutscheincode (Privater Schlüssel)</span>
       <div class="reveal__value-row">
         <code class="reveal__code reveal__code--key">{{ props.privateKey }}</code>
         <button type="button" class="reveal__copy" @click="copy('key', props.privateKey)">
@@ -77,11 +74,10 @@ async function copy(field: string, text: string) {
     </div>
 
     <RouterLink
-      v-if="!props.redeemed"
       class="reveal__redeem"
-      :to="{ name: 'coupon-redeem', query: { id: props.couponId, key: props.privateKey } }"
+      :to="{ name: 'coupon-redeem', query: { key: props.privateKey } }"
     >
-      Jetzt beim Kauf einlösen →
+      Zum Einlösen (Checkout-Demo) →
     </RouterLink>
   </div>
 </template>
@@ -120,11 +116,6 @@ async function copy(field: string, text: string) {
   letter-spacing: 0.02em;
 }
 
-.reveal__badge--redeemed {
-  background: var(--bd-neutral-tint);
-  color: var(--bd-neutral);
-}
-
 .reveal__value {
   font-size: 20px;
   font-weight: 800;
@@ -137,10 +128,16 @@ async function copy(field: string, text: string) {
   color: var(--bd-grey-text);
 }
 
-.reveal__hint {
-  font-size: 14px;
+.reveal__warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--bd-radius-sm);
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 13px;
   line-height: 1.5;
-  color: var(--bd-grey-text);
 }
 
 .reveal__field {

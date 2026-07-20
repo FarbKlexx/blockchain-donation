@@ -13,12 +13,14 @@ const props = defineProps<{
    *  milestones AFTER the goal is met — until then this card stays locked,
    *  so it can never display confirmations that the concept forbids. */
   votingOpen: boolean
-  /** The connected account may vote on THIS milestone (is a validator here, the
-   *  milestone is the current open one, and they haven't voted yet). UI gate
-   *  only — the contract re-checks every precondition. */
+  /** The connected account may vote on THIS milestone RIGHT NOW (is a validator
+   *  here and the milestone is the current open one). A validator may also CHANGE
+   *  their vote while the poll is open, so this stays true after they've voted —
+   *  the card just disables the already-cast choice. UI gate only; the contract
+   *  re-checks every precondition. */
   canVote?: boolean
-  /** This account's already-cast vote on this milestone, if any (session-local
-   *  in the prototype; from chain once wired). */
+  /** This account's current on-chain vote on this milestone, if any (derived from
+   *  chain, so it's correct after a reload). */
   myVote?: 'approve' | 'reject' | null
   /** A vote tx for this milestone is in flight. */
   voting?: boolean
@@ -133,10 +135,12 @@ const avatars = computed(() =>
          contract's voteMilestone gate and send the real vote tx (see
          services/projectsService.voteOnMilestone). -->
     <div v-if="canVote || myVote" class="ms__vote">
-      <template v-if="myVote">
-        <span class="ms__voted" :class="`ms__voted--${myVote === 'approve' ? 'yes' : 'no'}`">
-          <AppIcon v-if="myVote === 'approve'" name="check" :size="13" />
-          {{ myVote === 'approve' ? 'Du hast zugestimmt' : 'Du hast abgelehnt' }}
+      <!-- Can vote now: both choices shown. A validator may CHANGE their vote
+           while the poll is open, so the only disabled button is the current
+           choice (re-submitting it reverts on-chain). -->
+      <template v-if="canVote">
+        <span class="ms__vote-label">
+          {{ myVote ? 'Deine Stimme – änderbar, solange offen' : 'Als Validator abstimmen' }}
         </span>
       </template>
       <template v-else>
@@ -145,22 +149,30 @@ const avatars = computed(() =>
           <button
             type="button"
             class="ms__vote-btn ms__vote-btn--yes"
-            :disabled="voting"
+            :class="{ 'ms__vote-btn--current': myVote === 'approve' }"
+            :disabled="voting || myVote === 'approve'"
             @click="emit('vote', true)"
           >
             <AppIcon name="check" :size="14" />
-            Zustimmen
+            {{ myVote === 'approve' ? 'Zugestimmt' : 'Zustimmen' }}
           </button>
           <button
             type="button"
             class="ms__vote-btn ms__vote-btn--no"
-            :disabled="voting"
+            :class="{ 'ms__vote-btn--current': myVote === 'reject' }"
+            :disabled="voting || myVote === 'reject'"
             @click="emit('vote', false)"
           >
-            Ablehnen
+            {{ myVote === 'reject' ? 'Abgelehnt' : 'Ablehnen' }}
           </button>
         </div>
-        <span v-if="voteError" class="ms__vote-error" role="alert">{{ voteError }}</span>
+      </template>
+      <!-- Voted, but the poll here is no longer open → static confirmation. -->
+      <template v-else>
+        <span class="ms__voted" :class="`ms__voted--${myVote === 'approve' ? 'yes' : 'no'}`">
+          <AppIcon v-if="myVote === 'approve'" name="check" :size="13" />
+          {{ myVote === 'approve' ? 'Du hast zugestimmt' : 'Du hast abgelehnt' }}
+        </span>
       </template>
     </div>
   </article>
@@ -385,6 +397,16 @@ const avatars = computed(() =>
   opacity: 0.6;
 }
 
+.ms__vote-btn--current {
+  box-shadow: 0 0 0 2px var(--bd-black);
+}
+
+/* The current choice is disabled, but it's the active selection — keep it full
+   strength rather than dimming it like an ordinary disabled button. */
+.ms__vote-btn--current:disabled {
+  opacity: 1;
+}
+
 .ms__vote-btn--yes {
   color: #fff;
   background: var(--bd-green);
@@ -422,10 +444,15 @@ const avatars = computed(() =>
   color: var(--bd-grey-text);
 }
 
-.ms__vote-error {
-  flex-basis: 100%;
-  font-size: 13px;
-  color: #dc2626;
+/* Owner payout */
+.ms__payout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--bd-divider);
 }
 
 /* Owner payout */

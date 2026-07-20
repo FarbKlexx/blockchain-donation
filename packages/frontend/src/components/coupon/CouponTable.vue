@@ -14,28 +14,28 @@ defineProps<{ coupons: Coupon[] }>()
     <div class="table__head" role="row">
       <span class="col col--key">Öffentlicher Schlüssel</span>
       <span class="col col--status">Status</span>
-      <span class="col col--date">Erstellt</span>
-      <span class="col col--value">Rabatt</span>
+      <span class="col col--date">Gültig bis</span>
+      <span class="col col--value">Wert</span>
     </div>
 
     <p v-if="coupons.length === 0" class="table__empty">Noch keine Gutscheine.</p>
 
-    <div v-for="coupon in coupons" :key="coupon.id" class="table__row" role="row">
+    <div v-for="coupon in coupons" :key="coupon.redemptionKey" class="table__row" role="row">
       <a
         class="col col--key coupon-key"
         :href="coupon.explorerUrl"
         target="_blank"
         rel="noopener"
-        :title="coupon.couponAddress"
+        :title="coupon.redemptionKey"
       >
-        {{ shortenAddress(coupon.couponAddress) }}
+        {{ shortenAddress(coupon.redemptionKey) }}
       </a>
       <span class="col col--status">
         <CouponStatusBadge :status="coupon.status" />
       </span>
-      <span class="col col--date">{{ formatUnixDate(coupon.createdAt) }}</span>
-      <span class="col col--value" :title="formatEth(coupon.value)">
-        {{ formatEur(coupon.valueEur) }}
+      <span class="col col--date">{{ formatUnixDate(coupon.expirationDate) }}</span>
+      <span class="col col--value" :title="formatEth(coupon.amount)">
+        {{ formatEur(coupon.amountEur) }}
       </span>
     </div>
   </div>

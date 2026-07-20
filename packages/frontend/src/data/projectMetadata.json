@@ -218,7 +218,7 @@
       ]
     },
     {
-      "address": "0x0ed2E86FcE2e5A7965f59708c01f88a722BC7f07",
+      "address": "0x86337dDaF2661A069D0DcB5D160585acC2d15E9a",
       "id": "gemeinschaftsgarten-lindenau",
       "verified": false,
       "title": "Gemeinschaftsgarten Lindenau",
@@ -250,7 +250,46 @@
       "news": []
     },
     {
-      "address": "0xf433C50017d963b6082043445bCD0A54716DDC1d",
+      "address": "0x9CfA6D15c80Eb753C815079F2b32ddEFd562C3e4",
+      "id": "lastenrad-kollektiv",
+      "verified": false,
+      "title": "Lastenrad-Kollektiv",
+      "summary": "Frei ausleihbare Lastenräder fürs Viertel – die Validatoren gaben einen Meilenstein nicht frei, das Projekt gilt als gescheitert.",
+      "description": [
+        "Das Lastenrad-Kollektiv wollte ein Netz kostenlos ausleihbarer E-Lastenräder im Viertel aufbauen: mehrere Räder an festen Stationen, per App reservierbar und von einem ehrenamtlichen Team gewartet.",
+        "Die Kampagne war finanziert und der erste Meilenstein – die Beschaffung der Räder – wurde ausgezahlt. Bei der anschließenden Abstimmung haben die Validatoren diesen Meilenstein jedoch abgelehnt, da die vereinbarten Nachweise fehlten. Damit gilt das Projekt als gescheitert.",
+        "Die im Vertrag verbliebenen Mittel können von den Spenderinnen und Spendern anteilig zurückgefordert werden."
+      ],
+      "image": "uploads/mesh-netzwerk-festivals/cover.jpg",
+      "category": "Soziales",
+      "milestones": [
+        {
+          "index": "01",
+          "title": "Beschaffung der Lastenräder",
+          "description": "Kauf von fünf E-Lastenrädern inklusive Schlössern und Erstausstattung."
+        },
+        {
+          "index": "02",
+          "title": "Stationen & Verleihsystem",
+          "description": "Aufbau der Stationen und ein einfaches App-basiertes Reservierungs- und Schließsystem."
+        },
+        {
+          "index": "03",
+          "title": "Betrieb & Wartung",
+          "description": "Erstes Betriebsjahr mit regelmäßiger Wartung durch das ehrenamtliche Team."
+        }
+      ],
+      "news": [
+        {
+          "date": "2026-06-18",
+          "title": "Meilenstein abgelehnt – Projekt gescheitert",
+          "body": "Die Validatoren haben den ersten Meilenstein nach der Auszahlung abgelehnt, weil die vereinbarten Belege nicht vorlagen. Das Projekt gilt damit als gescheitert. Die verbliebenen Mittel stehen den Spenderinnen und Spendern anteilig als Rückzahlung zur Verfügung.",
+          "images": []
+        }
+      ]
+    },
+    {
+      "address": "0x427f7c59ED72bCf26DfFc634FEF3034e00922DD8",
       "id": "open-air-kino-hinterhof",
       "verified": false,
       "title": "Open-Air-Kino im Hinterhof",

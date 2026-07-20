@@ -2,8 +2,8 @@
 import type { CouponStatus } from '@/types/coupon'
 import { COUPON_STATUS_LABELS } from '@/utils/coupon'
 
-// Small status pill — Aktiv (green) / Eingelöst (neutral). Colors reuse the
-// shared status tokens (same palette as the milestone badges).
+// Small status pill — Aktiv (green) / Eingelöst (neutral) / Abgelaufen (amber).
+// Colors reuse the shared status tokens (same palette as the milestone badges).
 defineProps<{ status: CouponStatus }>()
 </script>
 
@@ -29,5 +29,10 @@ defineProps<{ status: CouponStatus }>()
 .badge--redeemed {
   color: var(--bd-neutral);
   background: var(--bd-neutral-tint);
+}
+
+.badge--expired {
+  color: #b45309;
+  background: #fef3c7;
 }
 </style>

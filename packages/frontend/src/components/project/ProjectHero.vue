@@ -1,24 +1,82 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import type { Funding, Project } from '@/types/project'
-import { donate } from '@/services/projectsService'
-import { decimalsFor, validateAmount } from '@/utils/amount'
+import { donate, estimateDonationGas, type TxGasEstimate } from '@/services/projectsService'
+import { decimalsFor, validateAmount, remainingAmountString } from '@/utils/amount'
 import { mediaUrl } from '@/utils/media'
 import { useWalletStore } from '@/stores/wallet'
+import { useNotificationStore } from '@/stores/notifications'
+import { useCelebrationStore } from '@/stores/celebration'
+import { toUserMessage } from '@/utils/errors'
 import AppIcon from '@/components/ui/AppIcon.vue'
+import TxConfirmDialog from '@/components/project/TxConfirmDialog.vue'
 
 const props = defineProps<{ project: Project }>()
 const emit = defineEmits<{ donated: [funding: Funding] }>()
 
 const wallet = useWalletStore()
+const notifications = useNotificationStore()
+const celebration = useCelebrationStore()
 const amount = ref('')
 const submitting = ref(false)
+// Inline error is for form-level validation only (empty/invalid amount, not
+// logged in). Transaction failures surface as toasts.
 const error = ref<string | null>(null)
+
+// Checkout overlay: opened by "Jetzt unterstützen", it shows a full cost
+// breakdown (amount + estimated gas) and only sends the tx once confirmed.
+const confirmOpen = ref(false)
+const estimating = ref(false)
+const estimate = ref<TxGasEstimate | null>(null)
+const estimateError = ref<string | null>(null)
+const pendingAmount = ref('')
 
 const decimals = computed(() => decimalsFor(props.project.currency))
 
-// INTEGRATION POINT: "Jetzt unterstützen" — the donation transaction.
-// Calls the mock service today; wire to the escrow contract's donate().
+// The still-needed amount (goal − raised) as a ready-to-donate input string.
+// Offered as a "Restbetrag" shortcut only while donations are open (Funding) and
+// something is actually left — so the user never has to compute it by hand.
+const remaining = computed(() =>
+  remainingAmountString(props.project.funding.goal, props.project.funding.raised),
+)
+
+// The donation box has three mutually-exclusive states:
+//  • funded   — goal reached (and not failed): green "finished" box.
+//  • closed   — project failed, or the funding period ended below goal: donations
+//               are no longer possible (the refund/mark-failed actions live on
+//               the detail page, not here).
+//  • open     — Funding, still within time and below goal: the donate form.
+const failed = computed(() => props.project.contractStatus === 'Failed')
+const funded = computed(
+  () => !failed.value && props.project.funding.goal > 0 && remaining.value === '',
+)
+const fundingEnded = computed(
+  () => props.project.contractStatus === 'Funding' && props.project.status === 'abgelaufen',
+)
+const donationsClosed = computed(() => !funded.value && (failed.value || fundingEnded.value))
+const donationsOpen = computed(() => !funded.value && !donationsClosed.value)
+const closedMessage = computed(() =>
+  failed.value
+    ? 'Projekt gescheitert – Spenden sind nicht mehr möglich.'
+    : 'Finanzierungsphase beendet – Spenden sind nicht mehr möglich.',
+)
+
+const canFillRemaining = computed(() => donationsOpen.value && remaining.value !== '')
+
+// A funding is "complete" once nothing is left to raise (same wei-based test the
+// `funded` box uses). Comparing the pre- and post-donation funding tells us
+// whether THIS donation is the one that crossed the goal.
+function fundingComplete(f: Funding): boolean {
+  return f.goal > 0 && remainingAmountString(f.goal, f.raised) === ''
+}
+
+function fillRemaining() {
+  amount.value = remaining.value
+  error.value = null
+}
+
+// "Jetzt unterstützen" — validate, then open the checkout overlay and estimate
+// the full cost. Nothing is signed/sent here; the tx only goes out on confirm.
 async function onDonate() {
   if (submitting.value) return
   error.value = null
@@ -36,18 +94,65 @@ async function onDonate() {
     return
   }
 
+  pendingAmount.value = check.value
+  estimate.value = null
+  estimateError.value = null
+  confirmOpen.value = true
+  estimating.value = true
+  try {
+    estimate.value = await estimateDonationGas(props.project.id, check.value)
+  } catch (e) {
+    estimateError.value = toUserMessage(e, 'Die Gaskosten konnten nicht geschätzt werden.')
+  } finally {
+    estimating.value = false
+  }
+}
+
+// Confirmed in the overlay → sign and send the donation.
+async function confirmDonate() {
+  if (submitting.value || !pendingAmount.value) return
   submitting.value = true
   try {
-    const result = await donate(props.project.id, check.value)
-    // Use the authoritative post-confirmation funding from the service,
-    // not a client-computed value.
+    const result = await donate(props.project.id, pendingAmount.value)
+    // Did THIS donation push the project over its goal? Compare the pre-donation
+    // funding (props, still the old state here) with the authoritative result.
+    const justFinished = !fundingComplete(props.project.funding) && fundingComplete(result.funding)
+    // Authoritative post-confirmation funding from the service (no client math).
     emit('donated', result.funding)
+    // The donation reduced the wallet's balance — refresh the navbar chip.
+    void wallet.refreshBalance()
+    if (justFinished) {
+      // Celebrate the donor who completed the project.
+      celebration.celebrate()
+      notifications.success(
+        `Deine Spende von ${pendingAmount.value} ${props.project.currency} hat das Ziel erreicht – das Projekt ist vollständig finanziert!`,
+        'Projekt finanziert',
+      )
+    } else {
+      notifications.success(
+        `Vielen Dank! Deine Spende von ${pendingAmount.value} ${props.project.currency} wurde übernommen.`,
+      )
+    }
     amount.value = ''
+    closeCheckout()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Spende fehlgeschlagen. Bitte erneut versuchen.'
+    notifications.error(toUserMessage(e), 'Spende fehlgeschlagen')
   } finally {
     submitting.value = false
   }
+}
+
+function closeCheckout() {
+  confirmOpen.value = false
+  pendingAmount.value = ''
+  estimate.value = null
+  estimateError.value = null
+}
+
+// Cancel from the overlay — never possible mid-send.
+function cancelDonate() {
+  if (submitting.value) return
+  closeCheckout()
 }
 </script>
 
@@ -69,7 +174,31 @@ async function onDonate() {
       </div>
 
       <div class="hero__donate-wrap">
-        <form class="hero__donate" :class="{ 'hero__donate--error': error }" @submit.prevent="onDonate">
+        <!-- Funded → green "finished" box; every viewer sees the goal is met. -->
+        <div v-if="funded" class="hero__donate hero__donate--funded">
+          <span class="hero__funded">
+            <AppIcon name="circle-check" :size="18" />
+            Ziel erreicht – vollständig finanziert
+          </span>
+          <button class="hero__submit" type="button" disabled>Finanziert</button>
+        </div>
+
+        <!-- Failed, or funding period ended below goal → donations closed. The
+             refund / mark-as-failed actions live in the detail page banner. -->
+        <div v-else-if="donationsClosed" class="hero__donate hero__donate--closed">
+          <span class="hero__closed">
+            <AppIcon name="circle-alert" :size="18" />
+            {{ closedMessage }}
+          </span>
+        </div>
+
+        <!-- Open → the donation form. -->
+        <form
+          v-else
+          class="hero__donate"
+          :class="{ 'hero__donate--error': error }"
+          @submit.prevent="onDonate"
+        >
           <span class="hero__currency">{{ project.currency }}</span>
           <!-- type="text", NOT "number": Vue auto-casts v-model on number inputs
                to a JS float, but the amount must stay a decimal STRING all the
@@ -84,12 +213,39 @@ async function onDonate() {
             aria-label="Spendenbetrag"
             :aria-invalid="error ? 'true' : undefined"
           />
+          <button
+            v-if="canFillRemaining"
+            class="hero__rest"
+            type="button"
+            :title="`Restbetrag einsetzen: ${remaining} ${project.currency}`"
+            @click="fillRemaining"
+          >
+            Restbetrag
+          </button>
           <button class="hero__submit" type="submit" :disabled="submitting">
             {{ submitting ? 'Sende …' : 'Jetzt unterstützen' }}
           </button>
         </form>
-        <p v-if="error" class="hero__error" role="alert">{{ error }}</p>
+        <p v-if="error && donationsOpen" class="hero__error" role="alert">{{ error }}</p>
       </div>
+
+      <TxConfirmDialog
+        :open="confirmOpen"
+        title="Spende bestätigen"
+        :summary="project.title"
+        :rows="[{ label: 'Spendenbetrag', value: `${pendingAmount} ${project.currency}` }]"
+        total-label="Gesamt (max.)"
+        :currency="project.currency"
+        hint="Betrag zzgl. maximaler Netzwerkgebühr. Die tatsächlichen Gaskosten können niedriger ausfallen; die Gebühr geht an das Netzwerk, nicht an das Projekt."
+        confirm-label="Jetzt spenden"
+        submitting-label="Sende …"
+        :estimate="estimate"
+        :estimating="estimating"
+        :estimate-error="estimateError"
+        :submitting="submitting"
+        @confirm="confirmDonate"
+        @cancel="cancelDonate"
+      />
     </div>
   </section>
 </template>
@@ -197,6 +353,26 @@ async function onDonate() {
   color: var(--bd-black);
 }
 
+/* Secondary shortcut that fills the input with the remaining amount. Sits
+   between the input and the primary submit CTA, styled subtly so it reads as a
+   helper, not a second call to action. */
+.hero__rest {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--bd-green);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.hero__rest:hover {
+  text-decoration: underline;
+}
+
 .hero__submit {
   background: var(--bd-black);
   color: var(--bd-surface);
@@ -221,6 +397,44 @@ async function onDonate() {
 
 .hero__donate--error {
   border-color: #dc2626;
+}
+
+/* Fully funded: green box + a clear "finished" label; the (disabled) button
+   greys out so it's obvious no more donations are possible. */
+.hero__donate--funded {
+  border-color: var(--bd-green);
+  background: var(--bd-green-tint);
+}
+
+.hero__funded {
+  flex: 1 1 0;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--bd-green);
+}
+
+/* Donations closed (failed / funding period ended) — flexible height so the
+   message can wrap on narrow widths. */
+.hero__donate--closed {
+  height: auto;
+  min-height: 42px;
+  padding: 10px 14px;
+  border-color: var(--bd-amber);
+  background: var(--bd-amber-tint);
+}
+
+.hero__closed {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--bd-amber);
 }
 
 .hero__error {

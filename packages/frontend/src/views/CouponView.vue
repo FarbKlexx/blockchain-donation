@@ -3,6 +3,8 @@ import { onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { Coupon } from '@/types/coupon'
 import { listCoupons } from '@/services/couponsService'
+import { useNotificationStore } from '@/stores/notifications'
+import { toUserMessage } from '@/utils/errors'
 import CouponHero from '@/components/coupon/CouponHero.vue'
 import CouponSteps from '@/components/coupon/CouponSteps.vue'
 import CouponTable from '@/components/coupon/CouponTable.vue'
@@ -12,6 +14,7 @@ import CouponTable from '@/components/coupon/CouponTable.vue'
 // public). Reads everything through couponsService (the integration seam).
 const coupons = ref<Coupon[]>([])
 const loading = ref(true)
+const notifications = useNotificationStore()
 
 // INTEGRATION POINT: coupon list. Service reads the mock contract source today;
 // later it reads the Coupon contract from chain. No backend/secret needed — the
@@ -20,6 +23,8 @@ async function load() {
   loading.value = true
   try {
     coupons.value = await listCoupons()
+  } catch (e) {
+    notifications.error(toUserMessage(e), 'Gutscheine konnten nicht geladen werden')
   } finally {
     loading.value = false
   }
@@ -45,8 +50,9 @@ onMounted(load)
       <div class="coupons__list-head">
         <h2 class="coupons__list-title">Alle Gutscheine</h2>
         <p class="coupons__list-lead">
-          Alle Gutscheine sind öffentlich auf der Blockchain einsehbar. Nur wer den privaten
-          Schlüssel besitzt, kann den Gutschein tatsächlich einlösen.
+          Alle Gutscheine sind öffentlich auf der Blockchain einsehbar. Zum Einlösen legt die Kundin
+          oder der Kunde den geheimen Code bei einer freigeschalteten Institution vor – diese erhält
+          den Betrag direkt vom Contract.
         </p>
       </div>
 
@@ -54,7 +60,7 @@ onMounted(load)
       <CouponTable v-else :coupons="coupons" />
 
       <p class="coupons__demo">
-        Zum Ausprobieren der Einlöse-Seite:
+        Checkout-Demo (Kundensicht):
         <RouterLink :to="{ name: 'coupon-redeem' }">Beim Kauf einlösen →</RouterLink>
       </p>
     </section>

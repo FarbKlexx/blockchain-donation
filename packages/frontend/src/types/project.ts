@@ -101,6 +101,13 @@ export interface Project {
    *  pays this one; validators vote on `currentMilestoneIndex - 1` (the last paid
    *  one, whose approval unlocks this payout). */
   currentMilestoneIndex: number
+  /** Amount set aside for proportional donor refunds, fixed at the moment the
+   *  project failed (`refundableBalance`). 0 unless `contractStatus === 'Failed'`. */
+  refundableBalance: number
+  /** Unix seconds until which the current vote runs (`votingDeadline`); 0 when no
+   *  vote is open. Lets the UI detect an expired vote that can flip a stalled
+   *  ToBeApproved/Payout campaign to Failed. */
+  votingDeadline: number
   /** Project-setup approval vote — validators confirm the project start to move
    *  it from ToBeApproved into Payout. Only actionable while
    *  `contractStatus === 'ToBeApproved'`. */

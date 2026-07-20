@@ -199,7 +199,7 @@ function mergeProject(c: ContractCampaign, m: ProjectMetadata): Project {
     // or an array of objects with a `description` field. Ensure the UI always
     // receives `description: string[]`.
     description: Array.isArray(m.description)
-      ? m.description.map((d) => (typeof d === 'string' ? d : String((d as any).description ?? '')))
+      ? m.description.map((d) => (typeof d === 'string' ? d : String((d as { description?: unknown }).description ?? '')))
       : [String(m.description ?? '')],
     image: m.image,
     category: m.category,
@@ -212,6 +212,8 @@ function mergeProject(c: ContractCampaign, m: ProjectMetadata): Project {
     status: deriveProjectStatus(c),
     contractStatus: c.currentStatus,
     currentMilestoneIndex: c.currentMilestoneIndex,
+    refundableBalance: c.refundableBalance,
+    votingDeadline: c.votingDeadline,
     projectSetup: {
       approvedCount: c.projectSetup?.approvedCount ?? 0,
       rejectedCount: c.projectSetup?.rejectedCount ?? 0,

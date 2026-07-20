@@ -3,6 +3,8 @@ import { computed, onMounted, ref } from 'vue'
 import type { Project } from '@/types/project'
 import { listProjects } from '@/services/projectsService'
 import { useWalletStore } from '@/stores/wallet'
+import { useNotificationStore } from '@/stores/notifications'
+import { toUserMessage } from '@/utils/errors'
 import ProjectCard from '@/components/project/ProjectCard.vue'
 import ProjectCardSkeleton from '@/components/project/ProjectCardSkeleton.vue'
 
@@ -11,6 +13,7 @@ import ProjectCardSkeleton from '@/components/project/ProjectCardSkeleton.vue'
 // NOT re-scan the chain; it just filters the full list by the cached address
 // sets. Each section renders only when the account has that role.
 const wallet = useWalletStore()
+const notifications = useNotificationStore()
 
 const projects = ref<Project[]>([])
 const loading = ref(true)
@@ -35,6 +38,8 @@ async function load() {
   try {
     // The full set once; sections are derived from it via the session memberships.
     projects.value = await listProjects({ filter: 'alle' })
+  } catch (e) {
+    notifications.error(toUserMessage(e), 'Projekte konnten nicht geladen werden')
   } finally {
     loading.value = false
   }

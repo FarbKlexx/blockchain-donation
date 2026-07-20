@@ -6,7 +6,10 @@
 interface ImportMetaEnv {
   readonly VITE_RPC_URL?: string
   readonly VITE_DEV_PRIVATE_KEY?: string
+  // Address of the deployed DonationFactory (donation subsystem).
   readonly VITE_CONTRACT_ADDRESS?: string
+  // Address of the deployed GiftCardProject (coupon/gift-card subsystem).
+  readonly VITE_GIFTCARD_ADDRESS?: string
 }
 
 interface ImportMeta {

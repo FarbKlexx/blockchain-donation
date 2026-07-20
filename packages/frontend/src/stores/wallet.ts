@@ -4,6 +4,7 @@ import {
   connectWallet,
   loadAccountSession,
   setActiveSignerKey,
+  getWalletBalance,
   type AccountSession,
   type Role,
 } from '@/services/projectsService'
@@ -28,6 +29,8 @@ export const useWalletStore = defineStore('wallet', () => {
   const address = ref<string | null>(null)
   const session = ref<AccountSession | null>(null)
   const connecting = ref(false)
+  // The connected account's on-chain native-coin balance (null = unknown yet).
+  const balance = ref<number | null>(null)
 
   const isConnected = computed(() => address.value !== null)
   const roles = computed(() => session.value?.roles ?? NO_ROLES)
@@ -49,6 +52,20 @@ export const useWalletStore = defineStore('wallet', () => {
     }
   }
 
+  /** Refresh the connected account's on-chain balance for the navbar chip.
+   *  Non-fatal: a read failure just clears it rather than breaking login. */
+  async function refreshBalance() {
+    if (!address.value) {
+      balance.value = null
+      return
+    }
+    try {
+      balance.value = await getWalletBalance(address.value)
+    } catch {
+      balance.value = null
+    }
+  }
+
   /** Core entry: adopt an address and derive its roles from chain (one scan).
    *  Used by both the mock-user overlay and the real wallet path.
    *
@@ -65,6 +82,7 @@ export const useWalletStore = defineStore('wallet', () => {
       setActiveSignerKey(privateKey ?? null, addr)
       address.value = addr
       session.value = await loadAccountSession(addr)
+      await refreshBalance()
       sessionStorage.setItem(STORAGE_KEY, addr) // persist the address only
     } finally {
       connecting.value = false
@@ -82,13 +100,17 @@ export const useWalletStore = defineStore('wallet', () => {
   /** Re-derive roles/memberships from chain (e.g. after a donation changes
    *  them). Cheap — one pass over the campaigns. */
   async function refresh() {
-    if (address.value) session.value = await loadAccountSession(address.value)
+    if (address.value) {
+      session.value = await loadAccountSession(address.value)
+      await refreshBalance()
+    }
   }
 
   function logout() {
     setActiveSignerKey(null)
     address.value = null
     session.value = null
+    balance.value = null
     sessionStorage.removeItem(STORAGE_KEY)
   }
 
@@ -110,6 +132,7 @@ export const useWalletStore = defineStore('wallet', () => {
     address,
     session,
     connecting,
+    balance,
     isConnected,
     roles,
     donorOf,
@@ -120,6 +143,7 @@ export const useWalletStore = defineStore('wallet', () => {
     login,
     connect,
     refresh,
+    refreshBalance,
     logout,
     restore,
   }
