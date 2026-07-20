@@ -466,58 +466,6 @@
       ]
     },
     {
-      "address": "0x2b7e1a4c6d8f0b3e5a7c9d1f2b4e6a8c0d2f4b61",
-      "contractOwner": "0xc3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c",
-      "donationGoal": 12000,
-      "totalDonations": 12000,
-      "donors": [
-        "0xa11ce00000000000000000000000000000000011",
-        "0xb0b0000000000000000000000000000000000012",
-        "0xca01000000000000000000000000000000000013",
-        "0xda1d000000000000000000000000000000000014"
-      ],
-      "start": 1778396400,
-      "end": 1783080000,
-      "currentStatus": "Failed",
-      "currentMilestoneIndex": 1,
-      "totalPayout": 4000,
-      "votingDeadline": 0,
-      "refundableBalance": 8000,
-      "validators": [
-        "0x12b9f3a7c1e5d8b04a6f2c9e7b1d3a5f8c0e2b34",
-        "0x88f2d4b6a8c0e2f4b6d8a0c2e4f6b8d0a2c4e610",
-        "0x55a1c3e5b7d9f0a2c4e6b8d0f2a4c6e8b0d2f491"
-      ],
-      "milestones": [
-        {
-          "amount": 4000,
-          "approvedCount": 0,
-          "rejectedCount": 2,
-          "votingFinished": true,
-          "paid": true
-        },
-        {
-          "amount": 5000,
-          "approvedCount": 0,
-          "rejectedCount": 0,
-          "votingFinished": false,
-          "paid": false
-        },
-        {
-          "amount": 3000,
-          "approvedCount": 0,
-          "rejectedCount": 0,
-          "votingFinished": false,
-          "paid": false
-        }
-      ],
-      "projectSetup": {
-        "approvedCount": 3,
-        "rejectedCount": 0,
-        "votingFinished": true
-      }
-    },
-    {
       "address": "0x7c6d5e4f3a2b1c0d9e8f70615243342516071829",
       "contractOwner": "0xd4e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d",
       "donationGoal": 20000,

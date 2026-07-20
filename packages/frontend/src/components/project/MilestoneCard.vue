@@ -24,12 +24,17 @@ const props = defineProps<{
   myVote?: 'approve' | 'reject' | null
   /** A vote tx for this milestone is in flight. */
   voting?: boolean
+  /** Error from the last vote attempt on this milestone (e.g. the local-signer
+   *  guard, or a revert once wired) — shown inline. */
+  voteError?: string | null
   /** The connected account is the owner and may pay out THIS milestone now (it
    *  is the current one and the previous milestone is approved). UI gate only —
    *  the contract re-checks isOwner / phase / lastMilestoneApproved. */
   canPayout?: boolean
   /** A payout tx for this milestone is in flight. */
   payingOut?: boolean
+  /** Error from the last payout attempt on this milestone — shown inline. */
+  payoutError?: string | null
 }>()
 
 const emit = defineEmits<{ vote: [approve: boolean]; payout: [] }>()
@@ -123,6 +128,7 @@ const avatars = computed(() =>
       >
         {{ payingOut ? 'Zahle aus …' : 'Meilenstein auszahlen' }}
       </button>
+      <span v-if="payoutError" class="ms__payout-error" role="alert">{{ payoutError }}</span>
     </div>
 
     <!-- Validator voting on the current milestone. The buttons mirror the
@@ -136,6 +142,9 @@ const avatars = computed(() =>
         <span class="ms__vote-label">
           {{ myVote ? 'Deine Stimme – änderbar, solange offen' : 'Als Validator abstimmen' }}
         </span>
+      </template>
+      <template v-else>
+        <span class="ms__vote-label">Als Validator abstimmen</span>
         <div class="ms__vote-actions">
           <button
             type="button"
@@ -446,6 +455,17 @@ const avatars = computed(() =>
   border-top: 1px solid var(--bd-divider);
 }
 
+/* Owner payout */
+.ms__payout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--bd-divider);
+}
+
 .ms__payout-label {
   font-size: 13px;
   font-weight: 600;
@@ -470,4 +490,9 @@ const avatars = computed(() =>
   opacity: 0.6;
 }
 
+.ms__payout-error {
+  flex-basis: 100%;
+  font-size: 13px;
+  color: #dc2626;
+}
 </style>
