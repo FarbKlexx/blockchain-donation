@@ -415,69 +415,6 @@ function onVoteSetup(approve: boolean) {
   openTxConfirm({ kind: 'vote-setup', approve })
 }
 
-// Owner: pay out the next milestone. The milestone the owner may pay is
-// `currentMilestoneIndex`, but only in the Payout phase and once the previous
-// milestone is approved (its card shows 'completed'). Milestone 0 is gated by
-// the project-setup vote — reflected by contractStatus already being 'Payout'.
-const payingOut = ref(false)
-const payoutError = ref<string | null>(null)
-
-const payableIndex = computed(() => {
-  const p = project.value
-  if (!p || p.contractStatus !== 'Payout') return -1
-  const k = p.currentMilestoneIndex
-  if (k >= p.milestones.length) return -1
-  if (k === 0) return 0
-  return p.milestones[k - 1]?.status === 'completed' ? k : -1
-})
-
-async function onPayout(index: number) {
-  if (!project.value || payingOut.value) return
-  payingOut.value = true
-  payoutError.value = null
-  try {
-    await payoutMilestone(project.value.contract.address, index)
-    // Paying a milestone opens its validator vote — re-read to show it.
-    await load()
-  } catch (e) {
-    payoutError.value =
-      e instanceof Error ? e.message : 'Auszahlung fehlgeschlagen. Bitte erneut versuchen.'
-  } finally {
-    payingOut.value = false
-  }
-}
-
-// Validator: approve/reject the PROJECT SETUP while the campaign is in
-// ToBeApproved (the one-time vote that must pass before any milestone is paid).
-const mySetupVote = ref<'approve' | 'reject' | null>(null)
-const setupVoting = ref(false)
-const setupError = ref<string | null>(null)
-
-// Show the setup-vote panel only while the vote is actually open on-chain.
-const setupVoteOpen = computed(
-  () => !!project.value && project.value.contractStatus === 'ToBeApproved',
-)
-const canVoteSetup = computed(
-  () => setupVoteOpen.value && isValidator.value && !mySetupVote.value,
-)
-
-async function onVoteSetup(approve: boolean) {
-  if (!project.value || setupVoting.value) return
-  setupVoting.value = true
-  setupError.value = null
-  try {
-    await voteProjectSetup(project.value.contract.address, approve)
-    mySetupVote.value = approve ? 'approve' : 'reject'
-    // A decisive vote flips the project to Payout (or Failed) — re-read.
-    await load()
-  } catch (e) {
-    setupError.value =
-      e instanceof Error ? e.message : 'Abstimmung fehlgeschlagen. Bitte erneut versuchen.'
-  } finally {
-    setupVoting.value = false
-  }
-}
-
 // Lifecycle gate (Spende → Stimme → Auszahlung): validators may only vote on
 // milestones once the funding goal is reached. The milestone UI keys off this,
 // so it can never present confirmations before the goal is met.
