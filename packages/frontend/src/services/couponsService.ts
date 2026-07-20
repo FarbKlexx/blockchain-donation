@@ -10,7 +10,7 @@
 //
 // THE CONTRACT MODEL (what the UI must mirror):
 //   • ONE deployed GiftCardProject manages ALL cards (not a per-card factory).
-//   • CREATE — the contract OWNER or a WHITELISTED INSTITUTION funds a card with
+//   • CREATE — ANY wallet funds a card with
 //     `msg.value` (the redeemable amount, ≥ giftCardValueMinimum) and a validity
 //     `duration` (≥ validityDurationMinimum). A card is an ECDSA keypair whose
 //     ADDRESS is the on-chain `redemptionKey`; its PRIVATE KEY is the secret code,
@@ -217,11 +217,13 @@ export async function getGiftCardConfig(): Promise<GiftCardConfig> {
  *  these are UI hints only. */
 export interface GiftCardAccount {
   address: string
-  /** The deploying account — may create cards and manage the whitelist. */
+  /** The deploying account — manages the institution whitelist. */
   isOwner: boolean
-  /** A whitelisted institution — may create AND redeem cards. */
+  /** A whitelisted institution — the only accounts that may REDEEM cards. */
   isInstitution: boolean
-  /** owner OR institution (createGiftCard's `isAllowedToCreateGiftCard`). */
+  /** ANY connected wallet may create a card: `createGiftCard` no longer gates on
+   *  owner/whitelist (the `isAllowedToCreateGiftCard` modifier was removed). Kept
+   *  as a field so the UI has a single source of truth if that ever changes. */
   canCreate: boolean
   /** institution only — the owner cannot redeem unless also whitelisted. */
   canRedeem: boolean
@@ -237,7 +239,8 @@ export async function loadGiftCardAccount(address: string): Promise<GiftCardAcco
     address,
     isOwner,
     isInstitution,
-    canCreate: isOwner || isInstitution,
+    // Creation is open to everyone with a wallet; only redemption stays gated.
+    canCreate: true,
     canRedeem: isInstitution,
   }
 }
@@ -298,12 +301,11 @@ function readEventArgs(
 }
 
 /**
- * Create ONE gift card as the connected wallet (owner or whitelisted
- * institution — the contract enforces `isAllowedToCreateGiftCard`). A fresh
- * keypair is generated client-side: its address becomes the on-chain
- * `redemptionKey`, its private key is the secret code — returned ONCE for the
- * creator to copy, never stored and never sent on-chain. The funded value is
- * `msg.value`.
+ * Create ONE gift card as the connected wallet. Creation is open to ANY wallet
+ * (the contract no longer gates it on owner/whitelist). A fresh keypair is
+ * generated client-side: its address becomes the on-chain `redemptionKey`, its
+ * private key is the secret code — returned ONCE for the creator to copy, never
+ * stored and never sent on-chain. The funded value is `msg.value`.
  */
 export async function createCoupon(params: CreateCouponParams): Promise<CreatedCoupon> {
   assertLocalSigner()
@@ -338,7 +340,7 @@ export async function createCoupon(params: CreateCouponParams): Promise<CreatedC
 /** Estimate the cost of creating a card WITHOUT sending it. Gas is independent
  *  of the (random) redemption key, so a throwaway address gives an accurate
  *  figure; the funded value is included in the total. Throws (with a revert
- *  reason, e.g. "Not allowed to create gift cards") if the create itself would
+ *  reason, e.g. below-minimum value/duration) if the create itself would
  *  fail. */
 export async function estimateCreateCouponGas(params: CreateCouponParams): Promise<TxGasEstimate> {
   assertLocalSigner()

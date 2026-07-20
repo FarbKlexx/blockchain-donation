@@ -12,9 +12,9 @@
 // THE MODEL (from the contract):
 //   • A single deployed `GiftCardProject` manages ALL gift cards (it is NOT a
 //     per-card factory like the donation system).
-//   • A gift card is created by the contract OWNER or a WHITELISTED INSTITUTION,
-//     who funds it with `msg.value` (the redeemable amount) and sets a validity
-//     `duration`. Random users cannot create cards.
+//   • A gift card can be created by ANY wallet, which funds it with `msg.value`
+//     (the redeemable amount) and sets a validity `duration`. Creation is open;
+//     only REDEMPTION is restricted to whitelisted institutions (see below).
 //   • A gift card IS an ECDSA keypair. The keypair ADDRESS is the on-chain
 //     `redemptionKey` (public, the card's identity). The PRIVATE KEY is the
 //     secret "gift-card code" — generated client-side, never sent on-chain, and
@@ -44,8 +44,8 @@ export interface ContractCoupon {
    *  against at redemption (`ECDSA.recover(...) == redemptionKey`). The join key
    *  to the off-chain secret (the matching private key). */
   redemptionKey: string
-  /** Wallet that CREATED and funded the card (`msg.sender` at creation; owner or
-   *  a whitelisted institution). Only this address may `refundGiftCard` it. */
+  /** Wallet that CREATED and funded the card (`msg.sender` at creation — any
+   *  wallet). Only this address may `refundGiftCard` it. */
   creator: string
   /** Redeemable value in wei, as an EXACT decimal string (never a JS float). The
    *  contract requires `amount == giftCard.amount` at redeem, so precision must be

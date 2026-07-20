@@ -128,8 +128,7 @@ async function confirmRefund() {
       <div v-else-if="coupons.length === 0" class="mine__panel">
         <h2 class="mine__panel-title">Noch keine Gutscheine</h2>
         <p class="mine__lead">
-          Diese Wallet hat noch keine Gutscheine erstellt. Gutscheine können nur der Betreiber und
-          freigeschaltete Institutionen erstellen.
+          Diese Wallet hat noch keine Gutscheine erstellt. Jede Wallet kann Gutscheine erstellen.
         </p>
         <RouterLink :to="{ name: 'coupon-create' }" class="mine__btn"> Gutscheine erstellen </RouterLink>
       </div>

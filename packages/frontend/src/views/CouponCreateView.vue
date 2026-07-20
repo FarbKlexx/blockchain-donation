@@ -34,12 +34,12 @@ import CouponCodeReveal from '@/components/coupon/CouponCodeReveal.vue'
 import TxConfirmDialog from '@/components/project/TxConfirmDialog.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 
-// The CREATE flow. The contract restricts creation to the OWNER or a WHITELISTED
-// INSTITUTION (isAllowedToCreateGiftCard); this view gates the form on that and
-// shows a notice otherwise. A card is funded on-chain with its value (msg.value)
-// and a validity duration; the creator gets back the private key (the code).
-// Owners also get an institution-management panel. Everything goes through
-// couponsService.
+// The CREATE flow. Creation is open to ANY connected wallet (the contract no
+// longer restricts it to the owner/whitelist) — only a connected wallet is
+// required. A card is funded on-chain with its value (msg.value) and a validity
+// duration; the creator gets back the private key (the code). Owners also get an
+// institution-management panel (institutions are what gate REDEMPTION, not
+// creation). Everything goes through couponsService.
 const wallet = useWalletStore()
 const notifications = useNotificationStore()
 const dialogOpen = ref(false)
@@ -219,8 +219,8 @@ async function removeInst(address: string) {
       <h1 class="create__title">Gutscheine erstellen</h1>
       <p class="create__subtitle">
         Legen Sie Gutscheine an und hinterlegen Sie ihren Wert direkt im Smart Contract. Sie erhalten
-        den geheimen Gutscheincode zum Verteilen. Nur der Betreiber und freigeschaltete Institutionen
-        können Gutscheine erstellen.
+        den geheimen Gutscheincode zum Verteilen. Jede Wallet kann Gutscheine erstellen; einlösen
+        können sie nur freigeschaltete Institutionen.
       </p>
     </header>
 
@@ -229,25 +229,11 @@ async function removeInst(address: string) {
       <span class="create__lock"><AppIcon name="lock" :size="20" /></span>
       <h2 class="create__panel-title">Wallet verbinden</h2>
       <p class="create__lead">
-        Melden Sie sich mit der Wallet des Betreibers oder einer freigeschalteten Institution an.
+        Melden Sie sich mit einer beliebigen Wallet an, um einen Gutschein zu erstellen.
       </p>
       <button class="create__btn" type="button" @click="dialogOpen = true">
         Einloggen mit Wallet
       </button>
-    </div>
-
-    <!-- Connected but not allowed to create -->
-    <div v-else-if="account && !account.canCreate" class="create__panel">
-      <span class="create__lock"><AppIcon name="lock" :size="20" /></span>
-      <h2 class="create__panel-title">Nicht berechtigt</h2>
-      <p class="create__lead">
-        Diese Wallet ({{ shortenAddress(wallet.address ?? '') }}) ist weder Betreiber noch eine
-        freigeschaltete Institution. Nur diese können Gutscheine erstellen. Der Betreiber kann
-        Institutionen im Verwaltungsbereich freischalten.
-      </p>
-      <RouterLink :to="{ name: 'coupons' }" class="create__btn create__btn--ghost">
-        Zu allen Gutscheinen
-      </RouterLink>
     </div>
 
     <!-- Success: created card + its code -->
@@ -358,8 +344,8 @@ async function removeInst(address: string) {
     <section v-if="account?.isOwner" class="card create__admin">
       <h2 class="card__title">Institutionen verwalten</h2>
       <p class="create__admin-lead">
-        Freigeschaltete Institutionen können Gutscheine erstellen und einlösen. Nur Sie als Betreiber
-        können diese Liste ändern.
+        Freigeschaltete Institutionen können Gutscheine einlösen (erstellen kann jede Wallet). Nur
+        Sie als Betreiber können diese Liste ändern.
       </p>
 
       <form class="create__admin-form" @submit.prevent="addInst">

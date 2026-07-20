@@ -4,7 +4,7 @@
 const steps = [
   {
     title: 'Erstellen & finanzieren',
-    body: 'Der Betreiber oder eine freigeschaltete Institution legt einen Gutschein an und hinterlegt den Wert direkt im Smart Contract. Dabei entsteht ein Schlüsselpaar – nur die öffentliche Adresse geht on-chain.',
+    body: 'Jede Wallet kann einen Gutschein anlegen und den Wert direkt im Smart Contract hinterlegen. Dabei entsteht ein Schlüsselpaar – nur die öffentliche Adresse geht on-chain.',
   },
   {
     title: 'Code weitergeben',

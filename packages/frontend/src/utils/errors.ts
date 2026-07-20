@@ -31,8 +31,7 @@ const GENERIC = 'Es ist ein Fehler aufgetreten. Bitte versuche es erneut.'
 // chain" message (the raw reason is never shown, but it is logged for devs).
 const REVERT_MESSAGES: Record<string, string> = {
   // ── GiftCardProject ──
-  'Not allowed to create gift cards':
-    'Nur der Betreiber oder eine freigeschaltete Institution kann Gutscheine erstellen.',
+  // (Creation is open to any wallet — no create-permission revert to map.)
   'Not a white listed institution.':
     'Nur freigeschaltete Institutionen können Gutscheine einlösen.',
   'Amount does not fulfill minimum requirement.':
