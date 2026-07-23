@@ -55,20 +55,31 @@ starten.
 
 ## Demo lokal starten
 
-Baut eine lokale Blockchain mit **5 Beispielkampagnen** auf (dieselben
+Baut eine lokale Blockchain mit **8 Beispielkampagnen** auf (dieselben
 Kampagnen wie in [`packages/frontend/src/data/contractData.json`](packages/frontend/src/data/contractData.json),
 aber mit echten Hardhat-Accounts statt Fake-Adressen — inkl. Spenden,
-Auszahlungen und Validator-Stimmen, sodass die Status-Varianten Funding (×3),
-Payout (×1) und Closed (×1) vorkommen; `Failed` wird von der Demo nicht
-erzeugt). Vier Terminals:
+Auszahlungen und Validator-Stimmen). Abgedeckte Status-Varianten:
+
+| Kampagne | Status | Demo-Zweck |
+| --- | --- | --- |
+| `burger-restaurant` | Funding | Spenden möglich, Ziel noch nicht erreicht |
+| `mesh-netzwerk-festivals` | Funding | dito |
+| `wiederaufforstung-eifel` | Funding | dito |
+| `gemeinschaftsgarten-lindenau` | ToBeApproved | Setup-Vote **offen** — die Stimme der Validator-Persona entscheidet |
+| `mobile-suppenkueche-berlin` | Payout | Meilenstein-Vote **offen**, danach Owner-Auszahlung möglich |
+| `roguelike-aetherbound` | Closed | vollständig durchgelaufen |
+| `lastenrad-kollektiv` | Failed | Meilenstein abgelehnt → Rückerstattung für Spender:innen |
+| `open-air-kino-hinterhof` | Failed | Förderzeit abgelaufen unter Ziel → Rückerstattung |
+
+Vier Terminals:
 
 ```sh
 # Terminal 1 — lokale Chain
 npm run node -w contracts
 
-# Terminal 2 — Factory + 5 Kampagnen deployen, Spenden/Votes/Payouts nachspielen.
+# Terminal 2 — Factory + 8 Kampagnen deployen, Spenden/Votes/Payouts nachspielen.
 # Schreibt automatisch VITE_CONTRACT_ADDRESS in packages/frontend/.env, aktualisiert
-# die Adressen in projectMetadata.json und löscht packages/backend/data.db (siehe unten).
+# die Adressen in projectMetadata.json und setzt packages/backend/data.db zurück (siehe unten).
 npm run deploy:donations -w contracts
 
 # Terminal 2 (optional) — Gutschein-System (GiftCardProject) deployen. Gibt die
@@ -93,19 +104,30 @@ Adressen + Private Keys aus):
 
 | Accounts | Rolle |
 | --- | --- |
-| #0 | Deployer + Standard-`VITE_DEV_PRIVATE_KEY` in `.env` — in keiner Kampagne eine Rolle (neutraler Zuschauer) |
-| #1–#5 | Je ein Owner, eine Kampagne pro Account |
-| #6–#8 | Validatoren, identisch in allen 5 Kampagnen |
-| #9–#19 | Spender-Pool |
+| #0 | Deployer der Factory — in keiner Kampagne eine Rolle (neutraler Zuschauer) |
+| #1–#5 | Owner, zyklisch über die 8 Kampagnen verteilt — #1, #2 und #3 besitzen je zwei, #4 und #5 je eine |
+| #6–#19 | Spender-Pool, rotierend über die Kampagnen |
 
-Um eine Schreibaktion (Spenden/Voten/Auszahlen) als bestimmte Rolle zu testen,
-`VITE_DEV_PRIVATE_KEY` in `packages/frontend/.env` auf den passenden Private
-Key setzen (aus der Konsolenausgabe von Terminal 1) und Vite neu laden — kein
+> **Validatoren werden NICHT fest zugeteilt.** Sobald eine Kampagne ihr
+> Förderziel erreicht, wählt der Contract sie zufällig aus den Spender:innen
+> dieser Kampagne, die mindestens `validatorMinimumDonation` (0.01 ETH) gegeben
+> haben. Wer Validator ist, unterscheidet sich also pro Kampagne und ist erst
+> nach dem Seeding bekannt (`getValidators()`). Ein Account kann Spender **und**
+> Validator derselben Kampagne sein.
+
+**Anmelden:** Im Dev-Build (`npm run dev`) bietet der Login-Dialog eine Liste
+fertiger Personas an ([`mockUsers.ts`](packages/frontend/src/services/mockUsers.ts))
+— Spender, Validator, Owner, Shop usw. Die Auswahl setzt zugleich den
+signierenden Key, d. h. die angezeigte Adresse ist auch die sendende. Das ist
+der bequeme Weg; `VITE_DEV_PRIVATE_KEY` in `.env` dient nur noch als Fallback,
+wenn keine Persona angemeldet ist. Die Personas sind auf
+`import.meta.env.DEV` beschränkt und landen nie in einem Production-Build — kein
 Wallet/MetaMask nötig für die lokale Demo.
 
 Für das **Gutschein-System** (`deploy:giftcard`, optional): Owner ist der Deployer
-(#0), als Institutionen sind per Default die Accounts #1 und #6 freigeschaltet
-(anpassbar im Frontend als Owner oder über `ignition/modules/GiftCard.ts`).
+(#0), als Institutionen sind per Default die Accounts #1, #6 und #7 freigeschaltet
+(#7 ist die „Beispiel-Shop"-Persona) — anpassbar im Frontend als Owner oder über
+[`ignition/modules/GiftCard.ts`](packages/contracts/ignition/modules/GiftCard.ts).
 
 ---
 
@@ -120,10 +142,10 @@ blockchain-donation/
 ├─ docs/                           # Architektur-Diagramme (SVG)
 └─ packages/
    ├─ contracts/                   # Hardhat 3 · Solidity · ethers v6 · TypeChain
-   │  ├─ contracts/                #   Donation.sol, DonationFactory.sol (+ Counter.sol Sample, *.t.sol)
+   │  ├─ contracts/                #   Donation.sol, DonationFactory.sol, GiftCard.sol (+ Counter.sol Sample, *.t.sol)
    │  ├─ test/                     #   TS-Integrationstests (mocha + ethers)
-   │  ├─ ignition/modules/         #   Ignition-Deploy-Module (Counter-Sample)
-   │  ├─ scripts/                  #   copy-artifacts.js, deploy-donations.ts, send-op-tx.ts
+   │  ├─ ignition/modules/         #   Ignition-Deploy-Module (Counter-Sample, GiftCard)
+   │  ├─ scripts/                  #   copy-artifacts.js, deploy-donations.ts, write-giftcard-env.js, send-op-tx.ts
    │  ├─ hardhat.config.ts         #   Netzwerke, solidity-Profile, typechain
    │  ├─ types/ethers-contracts/   #   generierte TypeChain-Typen   (gitignored)
    │  └─ artifacts/                #   Bytecode + ABI               (gitignored)
@@ -356,7 +378,8 @@ Im Repo-Root ausführbar; delegieren an die passenden Workspaces:
 | `npm run node` | Lokale Hardhat-Node starten |
 | `npm run deploy:local` | Ignition-Deployment (`Counter`-Sample) gegen die lokale Node |
 | `npm run deploy:sepolia` | Ignition-Deployment (`Counter`-Sample) nach Sepolia |
-| `npm run deploy:donations` | `DonationFactory` + 5 Beispielkampagnen deployen, siehe [Demo lokal starten](#demo-lokal-starten) |
+| `npm run deploy:donations` | `DonationFactory` + 8 Beispielkampagnen deployen, siehe [Demo lokal starten](#demo-lokal-starten) |
+| `npm run deploy:giftcard` | `GiftCardProject` deployen (unabhängig vom Spenden-System); schreibt `VITE_GIFTCARD_ADDRESS` |
 | `npm run dev` | Contracts kompilieren **+** Frontend-Dev-Server |
 | `npm run build` | Contracts kompilieren **+** Frontend-Production-Build |
 
@@ -375,6 +398,18 @@ Einzelne Workspace-Scripts gezielt: `npm run <script> -w contracts` bzw.
 - **`Cannot find module '@/contracts/typechain'`**
   Die generierten Typen fehlen → einmal `npm run compile` ausführen (sie sind
   gitignored und entstehen erst beim Kompilieren).
+- **`"GiftCardProject__factory" is not exported by ".../typechain/index.ts"`**
+  Die gespiegelten Typen sind älter als die Contracts (typisch nach einem Pull,
+  der einen neuen Contract mitbringt) → `npm run compile -w contracts`. Meldet
+  Hardhat dabei „No contracts to compile", greift der Cache; dann reicht
+  `node scripts/copy-artifacts.js` in `packages/contracts`, um nur neu zu
+  spiegeln. Schlägt das mit `EBUSY` auf `typechain` fehl, hält ein laufender
+  Vite-Dev-Server oder Editor das Verzeichnis — kurz stoppen und wiederholen.
+- **`HHE902: The package "@openzeppelin/contracts" is not installed`**
+  Eine Dependency wurde in `packages/contracts/package.json` ergänzt, aber nie
+  installiert → `npm install` im Repo-Root (Workspaces installieren alles
+  gemeinsam). Folgefehler beachten: solange die Contracts nicht kompilieren,
+  werden auch die TypeChain-Typen fürs Frontend nicht neu erzeugt (siehe oben).
 - **`npm warn EBADENGINE … required: { node: '^22.13.0' }`**
   Nur ein Hinweis, dass du nicht auf Node 22 bist. Die Installation läuft
   trotzdem durch.
@@ -393,6 +428,14 @@ Einzelne Workspace-Scripts gezielt: `npm run <script> -w contracts` bzw.
   jedem `deploy:donations`-Lauf wird sie neu geschrieben. Falls das Grid bei
   einem bereits laufenden `npm run dev` leer bleibt, den Dev-Server neu starten,
   damit die aktuelle `.env` sicher geladen ist.
+- **Gutschein-Seiten melden `VITE_GIFTCARD_ADDRESS ist nicht gesetzt`**
+  Das Gutschein-System wird separat deployt → `npm run deploy:giftcard -w contracts`
+  (setzt die Variable selbst), danach Vite neu starten. `deploy:donations` ändert
+  daran nichts — beide Systeme laufen unabhängig auf derselben Node.
+- **Weiße Seite / App reagiert nicht, Konsole zeigt einen Compile-Fehler**
+  Ein Template- oder Import-Fehler bricht den ganzen Client-Build ab, nicht nur
+  die betroffene Seite. `npm run build -w frontend` gibt Datei und Zeile deutlich
+  aus — schneller zu lesen als der Overlay im Browser.
 
 ## HardHat Adressen
 
