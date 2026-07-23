@@ -42,7 +42,7 @@ function scaledWei(mockAmount: number): bigint {
 function updateFrontendEnv(factoryAddress: string) {
   const envPath = path.join(frontendRoot, ".env");
   const examplePath = path.join(frontendRoot, ".env.example");
-  if (!existsSync(envPath)) copyFileSync(envPath, examplePath);
+  if (!existsSync(envPath)) copyFileSync(examplePath, envPath);
 
   let contents = readFileSync(envPath, "utf8");
   const line = `VITE_CONTRACT_ADDRESS=${factoryAddress}`;
