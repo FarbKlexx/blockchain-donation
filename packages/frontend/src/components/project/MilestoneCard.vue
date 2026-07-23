@@ -142,9 +142,6 @@ const avatars = computed(() =>
         <span class="ms__vote-label">
           {{ myVote ? 'Deine Stimme – änderbar, solange offen' : 'Als Validator abstimmen' }}
         </span>
-      </template>
-      <template v-else>
-        <span class="ms__vote-label">Als Validator abstimmen</span>
         <div class="ms__vote-actions">
           <button
             type="button"
