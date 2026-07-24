@@ -1,4 +1,4 @@
-****# blockchain-donation
+# blockchain-donation
 
 Spenden-dApp als **npm-Workspaces-Monorepo**: Smart Contracts (Hardhat 3 +
 ethers v6) in [`packages/contracts`](packages/contracts), Vue-3-Frontend in
